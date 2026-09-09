@@ -51,6 +51,27 @@ Worth walking specifically: both meeting journeys (instant and scheduled) · the
 
 ---
 
+## Version control
+
+This is already a Git repository with Phase 0 committed on `main`. To put it on a remote:
+
+```bash
+git remote add origin <your repository URL>
+git push -u origin main
+```
+
+Conventions, so history stays readable and tickets stay traceable:
+
+- **Branches** — `feat/P1-03-capability-guard`, `fix/P4-07-watermark`. One ticket per branch.
+- **Commits** — `type(scope): summary`, with the ticket id as the scope where there is one:
+  `feat(P3-04): agenda carry-forward`. Types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`.
+- **`main` stays green.** Merge only when `pnpm lint`, `pnpm typecheck` and `pnpm test` all pass —
+  the CI workflow runs exactly those, plus the migration, the seed and the two assertions.
+- **Never commit `.env`.** It is ignored; `.env.example` is the one that is tracked.
+- `pnpm-lock.yaml` **is** committed — CI installs with `--frozen-lockfile`.
+
+---
+
 ## Commands
 
 ```bash
