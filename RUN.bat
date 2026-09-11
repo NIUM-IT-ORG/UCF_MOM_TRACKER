@@ -41,18 +41,24 @@ where pnpm >nul 2>&1
 if not errorlevel 1 set "PM=pnpm"
 if not defined PM set "PM=npx --yes pnpm@10"
 
+REM If setup fell back to the project-local PostgreSQL, it has to run
+REM alongside the apps - it is a child process, so it goes when they go.
+set "DEVCMD=dev"
+if exist "var\pgdata" set "DEVCMD=dev:all"
+
 echo.
 echo   Starting MoM_Tracker
-echo   Web  http://localhost:3000
-echo   API  http://localhost:4000/api/v1/health
-echo   Ctrl+C stops both.
+if "!DEVCMD!"=="dev:all" echo   Database  bundled PostgreSQL on port 5433
+echo   Web       http://localhost:3000
+echo   API       http://localhost:4000/api/v1/health
+echo   Ctrl+C stops everything.
 echo.
 
 REM Open the browser shortly after the servers start. Fire and forget, so it
 REM cannot hold up or interfere with them.
 start "" /b cmd /c "timeout /t 14 /nobreak >nul & start """" http://localhost:3000"
 
-call %PM% dev
+call %PM% !DEVCMD!
 
 echo.
 pause

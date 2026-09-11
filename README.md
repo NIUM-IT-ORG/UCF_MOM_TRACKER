@@ -9,8 +9,12 @@ Phase 0 is complete: workspace, database, migration, seed, both applications, CI
 ## Get it running
 
 **On Windows: double-click `SETUP.bat`, then `RUN.bat`.** Setup checks what is installed, prepares
-the database, installs everything, migrates, seeds, verifies, and offers to start. It asks for one
-thing — the postgres superuser password — and is safe to run more than once.
+the database, installs everything, migrates, seeds, verifies, and offers to start. It is safe to
+run more than once.
+
+It uses an installed PostgreSQL if it finds one, and asks for the postgres superuser password.
+If there isn't one, it fetches a **project-local PostgreSQL** from the npm registry into `var/` —
+no installer, no Windows service, no administrator rights, and deleting `var/` undoes it.
 
 By hand, or on any other platform:
 
@@ -83,12 +87,15 @@ Conventions, so history stays readable and tickets stay traceable:
 
 ```bash
 pnpm dev                  # both apps
+pnpm dev:all              # both apps plus the project-local database
 pnpm build                # both apps
 pnpm test                 # unit + api
 pnpm lint                 # --max-warnings 0, must be clean
 pnpm typecheck
 
 pnpm db:deploy            # apply existing migrations
+pnpm db:apply             # same, without Prisma's engine (blocked-CDN fallback)
+pnpm db:local             # run the project-local database on its own
 pnpm db:migrate           # create a migration after editing schema.prisma
 pnpm db:seed              # reload the prototype dataset
 pnpm db:reset             # drop, migrate, seed

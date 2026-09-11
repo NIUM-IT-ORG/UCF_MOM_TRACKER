@@ -9,6 +9,7 @@
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "dev": "concurrently -n api,web -c blue,magenta \"pnpm --filter @mom/api dev\" \"pnpm --filter @mom/web dev\"",
+    "dev:all": "concurrently -n db,api,web -c green,blue,magenta \"pnpm db:local\" \"pnpm --filter @mom/api dev\" \"pnpm --filter @mom/web dev\"",
     "build": "pnpm --filter @mom/shared build && pnpm --filter @mom/api build && pnpm --filter @mom/web build",
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write .",
@@ -22,6 +23,9 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:apply": "node scripts/apply-migrations.mjs",
+    "db:local": "node scripts/local-db.mjs start",
+    "db:local:init": "node scripts/local-db.mjs init",
+    "db:local:setup": "node scripts/local-db.mjs run db:apply db:seed assert:invariants assert:seed",
     "db:seed": "tsx prisma/seed.ts",
     "assert:invariants": "tsx scripts/assert-invariants.ts",
     "assert:seed": "tsx scripts/assert-seed.ts",

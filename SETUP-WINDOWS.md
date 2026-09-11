@@ -23,7 +23,27 @@ The rest of this document is the same thing done by hand.
 
 ---
 
-## The long way — two installs, five commands
+## About the database
+
+Setup prefers a **properly installed PostgreSQL** and uses it whenever it finds
+one. If there isn't one, it falls back to a **project-local PostgreSQL**: the
+binaries come from the npm registry into `var/localdb`, the data lives in
+`var/pgdata`, and it listens on port 5433 so it can never collide with a real
+PostgreSQL on 5432.
+
+Nothing is installed system-wide, no Windows service is created, and no
+administrator rights are needed. Deleting the `var` folder undoes all of it.
+
+The bundled database runs as a child of `pnpm dev:all`, so it starts and stops
+with the application - `RUN.bat` picks the right command for you. It is a
+development convenience only; a server runs a properly installed PostgreSQL
+(see `docs/10-DEPLOYMENT.md`). To move onto one later, install PostgreSQL,
+create the role and database as below, point `DATABASE_URL` at port 5432, and
+run `pnpm db:deploy && pnpm db:seed`.
+
+---
+
+## The long way - two installs, five commands
 
 Everything the compose file would have provided has a local equivalent, chosen
 so that nothing extra has to be running:

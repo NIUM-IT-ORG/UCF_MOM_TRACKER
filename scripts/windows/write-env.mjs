@@ -6,6 +6,7 @@
  * already a hard requirement.
  *
  *   node scripts/windows/write-env.mjs [databaseUrl]
+ *   node scripts/windows/write-env.mjs --local   (use the bundled database)
  *
  * Never overwrites an existing .env - an existing one is the developer's, and
  * silently replacing it would throw away whatever they had configured.
@@ -35,7 +36,11 @@ let text = readFileSync(examplePath, 'utf8')
   .replace('replace_me_with_a_long_random_string', secret())
   .replace('replace_me_with_a_different_long_random_string', secret());
 
-const databaseUrl = process.argv[2];
+let databaseUrl = process.argv[2];
+if (databaseUrl === '--local') {
+  // One definition of the bundled database's address, in local-db.mjs.
+  ({ LOCAL_DB_URL: databaseUrl } = await import('../local-db.mjs'));
+}
 if (databaseUrl) {
   text = text.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseUrl}`);
 }

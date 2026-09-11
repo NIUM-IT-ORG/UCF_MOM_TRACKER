@@ -92,14 +92,17 @@ for /f "tokens=*" %%v in ('%PM% --version 2^>nul') do set "PNPMV=%%v"
 echo    OK  pnpm !PNPMV!
 
 REM ---- 3 - PostgreSQL ------------------------------------------------
+REM An installed PostgreSQL is preferred and used whenever one is found.
+REM Otherwise a copy is fetched from the npm registry into the project - no
+REM installer, no service, no administrator rights. See scripts/local-db.mjs.
 echo.
 echo == PostgreSQL
 set "PSQL="
+set "LOCALDB="
 where psql >nul 2>&1
 if not errorlevel 1 set "PSQL=psql"
 
 if not defined PSQL (
-  REM The Windows installer does not add itself to PATH. Look where it lands.
   for /f "delims=" %%d in ('dir /b /ad /o-n "C:\Program Files\PostgreSQL" 2^>nul') do (
     if not defined PSQL if exist "C:\Program Files\PostgreSQL\%%d\bin\psql.exe" (
       set "PSQL=C:\Program Files\PostgreSQL\%%d\bin\psql.exe"
@@ -108,23 +111,20 @@ if not defined PSQL (
   )
 )
 
-if not defined PSQL (
-  echo.
-  echo   STOPPED: PostgreSQL was not found.
-  echo.
-  echo   Install it from  https://www.postgresql.org/download/windows/
-  echo   Keep port 5432, and note the postgres password you set.
-  echo.
-  echo   If you have winget, this also works:
-  echo       winget install --id PostgreSQL.PostgreSQL.16 -e
-  echo.
-  echo   Then close this window, open a new one, and run SETUP.bat again
-  echo   so it picks up the new PATH.
-  goto :fail
+if defined PSQL (
+  echo    OK  found an installed PostgreSQL - using it
+) else (
+  set "LOCALDB=1"
+  echo    No installed PostgreSQL found.
+  echo    Using a project-local PostgreSQL instead: the binaries come from
+  echo    the npm registry into var\localdb, the data lives in var\pgdata,
+  echo    and it listens on port 5433. No installer, no Windows service,
+  echo    no administrator rights. Deleting the var folder undoes all of it.
 )
-echo    OK  psql found
 
 REM ---- 4 - database and role -----------------------------------------
+if defined LOCALDB goto :skipsysdb
+
 echo.
 echo == Database
 echo    The postgres superuser password is the one set when PostgreSQL
@@ -161,10 +161,16 @@ if "!DBFOUND!"=="1" (
 )
 set "PGPASSWORD="
 
+:skipsysdb
+
 REM ---- 5 - configuration ---------------------------------------------
 echo.
 echo == Configuration
-call node scripts\windows\write-env.mjs
+if defined LOCALDB (
+  call node scripts\windows\write-env.mjs --local
+) else (
+  call node scripts\windows\write-env.mjs
+)
 if errorlevel 1 goto :fail
 
 REM ---- 6 - dependencies ----------------------------------------------
@@ -177,9 +183,17 @@ call %PM% --filter @mom/shared build
 if errorlevel 1 goto :fail
 echo    OK  installed
 
-REM ---- 7 - schema and demo data --------------------------------------
+REM ---- 7 - schema, data, verification ---------------------------------
 echo.
-echo == Database schema and demo data
+echo == Database schema, demo data and verification
+
+if defined LOCALDB (
+  REM Starts the bundled database, runs all four steps against it, stops it.
+  call %PM% db:local:setup
+  if errorlevel 1 goto :fail
+  goto :verified
+)
+
 call %PM% db:deploy
 if errorlevel 1 (
   echo.
@@ -192,15 +206,13 @@ if errorlevel 1 (
 )
 call %PM% db:seed
 if errorlevel 1 goto :fail
-echo    OK  migrated and seeded
-
-REM ---- 8 - prove it --------------------------------------------------
-echo.
-echo == Verification
 call %PM% assert:invariants
 if errorlevel 1 goto :fail
 call %PM% assert:seed
 if errorlevel 1 goto :fail
+
+:verified
+echo    OK  migrated, seeded and verified
 
 echo.
 echo   ================================================================
