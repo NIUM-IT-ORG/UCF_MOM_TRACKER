@@ -34,6 +34,13 @@ if errorlevel 1 (
 )
 :gotpsql
 
+REM Same pnpm resolution as SETUP.bat: prefer a real install, fall back to
+REM npx, which needs neither an install nor elevation.
+set "PM="
+where pnpm >nul 2>&1
+if not errorlevel 1 set "PM=pnpm"
+if not defined PM set "PM=npx --yes pnpm@10"
+
 echo.
 echo   Starting MoM_Tracker
 echo   Web  http://localhost:3000
@@ -45,7 +52,7 @@ REM Open the browser shortly after the servers start. Fire and forget, so it
 REM cannot hold up or interfere with them.
 start "" /b cmd /c "timeout /t 14 /nobreak >nul & start """" http://localhost:3000"
 
-call pnpm dev
+call %PM% dev
 
 echo.
 pause

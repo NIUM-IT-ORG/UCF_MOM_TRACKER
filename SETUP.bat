@@ -34,22 +34,61 @@ if errorlevel 1 (
 )
 
 REM ---- 2 - pnpm ------------------------------------------------------
+REM Three ways to get pnpm, tried in order of how pleasant they are to live
+REM with. Corepack is first but often cannot write its shims: they go into
+REM the Node installation folder, which needs administrator rights when Node
+REM sits in Program Files. npx is last because it is slower, but it needs no
+REM install and no elevation at all, so it always works.
 echo.
 echo == pnpm
+set "PM="
+
 where pnpm >nul 2>&1
-if errorlevel 1 (
-  echo    pnpm not found - enabling it through Corepack, which ships with Node.
-  call corepack enable >nul 2>&1
-  call corepack prepare pnpm@10 --activate >nul 2>&1
+if not errorlevel 1 (
+  set "PM=pnpm"
+  goto :gotpnpm
 )
+
+echo    pnpm not found - trying Corepack, which ships with Node.
+call corepack enable >nul 2>&1
+call corepack prepare pnpm@10 --activate >nul 2>&1
 where pnpm >nul 2>&1
-if errorlevel 1 (
-  echo.
-  echo   STOPPED: pnpm is still not on PATH.
-  echo   Run  npm install -g pnpm  in a new window, then run this again.
-  goto :fail
+if not errorlevel 1 (
+  set "PM=pnpm"
+  echo    OK  enabled through Corepack
+  goto :gotpnpm
 )
-for /f "tokens=*" %%v in ('pnpm --version') do set "PNPMV=%%v"
+
+echo    Corepack could not do it - that usually means it needed
+echo    administrator rights. Installing pnpm with npm instead.
+call npm install -g pnpm@10 >nul 2>&1
+where pnpm >nul 2>&1
+if not errorlevel 1 (
+  set "PM=pnpm"
+  echo    OK  installed with npm
+  goto :gotpnpm
+)
+
+echo    npm could not install it globally either - falling back to npx,
+echo    which needs no install and no elevation. Slightly slower, works fine.
+call npx --yes pnpm@10 --version >nul 2>&1
+if not errorlevel 1 (
+  set "PM=npx --yes pnpm@10"
+  echo    OK  using npx
+  goto :gotpnpm
+)
+
+echo.
+echo   STOPPED: could not get pnpm working by any route.
+echo.
+echo   Try this in a new window, then run SETUP.bat again:
+echo       npm install -g pnpm
+echo.
+echo   If that fails too, it is usually a proxy blocking the npm registry.
+goto :fail
+
+:gotpnpm
+for /f "tokens=*" %%v in ('%PM% --version 2^>nul') do set "PNPMV=%%v"
 echo    OK  pnpm !PNPMV!
 
 REM ---- 3 - PostgreSQL ------------------------------------------------
@@ -132,35 +171,35 @@ REM ---- 6 - dependencies ----------------------------------------------
 echo.
 echo == Dependencies
 echo    First run downloads a few hundred packages. Give it a minute or two.
-call pnpm install
+call %PM% install
 if errorlevel 1 goto :fail
-call pnpm --filter @mom/shared build
+call %PM% --filter @mom/shared build
 if errorlevel 1 goto :fail
 echo    OK  installed
 
 REM ---- 7 - schema and demo data --------------------------------------
 echo.
 echo == Database schema and demo data
-call pnpm db:deploy
+call %PM% db:deploy
 if errorlevel 1 (
   echo.
   echo    Prisma could not apply the migrations. That is usually its engine
   echo    download being blocked by a proxy. The migrations are plain SQL,
   echo    so applying them directly instead.
   echo.
-  call pnpm db:apply
+  call %PM% db:apply
   if errorlevel 1 goto :fail
 )
-call pnpm db:seed
+call %PM% db:seed
 if errorlevel 1 goto :fail
 echo    OK  migrated and seeded
 
 REM ---- 8 - prove it --------------------------------------------------
 echo.
 echo == Verification
-call pnpm assert:invariants
+call %PM% assert:invariants
 if errorlevel 1 goto :fail
-call pnpm assert:seed
+call %PM% assert:seed
 if errorlevel 1 goto :fail
 
 echo.

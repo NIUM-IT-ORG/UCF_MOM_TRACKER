@@ -61,15 +61,22 @@ CREATE DATABASE mom_tracker OWNER ucf;
 If you would rather use the `postgres` superuser, skip that and change
 `DATABASE_URL` in step 3 instead.
 
-## 2 · Enable pnpm
+## 2 · Get pnpm
 
-Node 20+ ships with Corepack, which installs pnpm for you:
+`SETUP.bat` handles this for you and tries three routes in turn, so one of them
+works whatever your machine allows. By hand, in order of preference:
 
 ```powershell
-corepack enable
+corepack enable            # ships with Node; needs admin if Node is in Program Files
 corepack prepare pnpm@10 --activate
-pnpm --version
+
+npm install -g pnpm@10     # if Corepack could not write its shims
+
+npx --yes pnpm@10 --version  # needs no install and no elevation at all
 ```
+
+If you end up on the `npx` route, put `npx --yes pnpm@10` wherever this
+document says `pnpm`. It is slower on the first call and identical afterwards.
 
 ## 3 · Configure
 
@@ -154,6 +161,12 @@ can get everything else in place while that is sorted out.
 **`pnpm db:deploy` says the database does not exist.** The `CREATE DATABASE`
 step in part 1 did not run, or `DATABASE_URL` points somewhere else. Check the
 database name at the end of the URL.
+
+**"pnpm is still not on PATH".** Corepack writes its shims into the Node
+installation folder, which needs administrator rights when Node is under
+Program Files. Setup now falls through to `npm install -g pnpm@10` and then to
+`npx`, so this should no longer stop you — but if you want a real install,
+run `npm install -g pnpm@10` in a new window.
 
 **Port 5432 is already in use.** An older PostgreSQL is running as a service.
 Either use it, or change the new one's port and update `DATABASE_URL`.
