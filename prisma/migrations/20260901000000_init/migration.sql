@@ -1,11 +1,11 @@
--- UCF Meeting & Action Item Tracker — initial migration
+-- UCF Meeting & Action Item Tracker - initial migration
 --
 -- This is P0-03 and P0-04 in one file, deliberately: the two invariants at the
 -- bottom (append-only audit, and the action/clarification column split) must be
 -- true from the first row the database ever holds, not from whenever a second
 -- migration happens to run.
 
--- ───────────────────────────────── enums ─────────────────────────────────
+-- --------------------------------- enums ---------------------------------
 
 CREATE TYPE "MeetingType" AS ENUM ('INSTANT', 'SCHEDULED');
 
@@ -43,7 +43,7 @@ CREATE TYPE "Channel"       AS ENUM ('EMAIL', 'WHATSAPP', 'IN_APP');
 CREATE TYPE "DispatchState" AS ENUM ('QUEUED', 'SENT', 'DELIVERED', 'READ', 'FAILED');
 CREATE TYPE "AccountState"  AS ENUM ('ACTIVE', 'SUSPENDED', 'INVITE_ONLY');
 
--- ─────────────────────────────── master data ───────────────────────────────
+-- ------------------------------- master data -------------------------------
 
 CREATE TABLE "designations" (
   "id"         TEXT PRIMARY KEY,
@@ -76,7 +76,7 @@ CREATE TABLE "projects" (
   "description"         TEXT,
   "status"              "ProjectStatus" NOT NULL DEFAULT 'PLANNING',
   "implementing_agency" TEXT,
-  -- Money is never a float. ₹ crore, two decimal places.
+  -- Money is never a float. rupees crore, two decimal places.
   "cost_cr"             DECIMAL(14,2) NOT NULL,
   "debt_sanctioned_cr"  DECIMAL(14,2) NOT NULL,
   "debt_drawn_cr"       DECIMAL(14,2) NOT NULL,
@@ -104,7 +104,7 @@ CREATE INDEX "ulbs_project_id_idx" ON "ulbs"("project_id");
 -- One lead ULB per project, enforced here rather than by a service that might forget.
 CREATE UNIQUE INDEX "ulbs_one_lead_per_project" ON "ulbs"("project_id") WHERE "is_lead";
 
--- ───────────────────────────────── people ─────────────────────────────────
+-- --------------------------------- people ---------------------------------
 
 CREATE TABLE "users" (
   "id"                TEXT PRIMARY KEY,
@@ -135,7 +135,7 @@ CREATE TABLE "project_members" (
 CREATE UNIQUE INDEX "project_members_user_id_project_id_key" ON "project_members"("user_id", "project_id");
 CREATE INDEX "project_members_project_id_idx" ON "project_members"("project_id");
 
--- ──────────────────────────────── meetings ────────────────────────────────
+-- -------------------------------- meetings --------------------------------
 
 CREATE TABLE "meetings" (
   "id"                TEXT PRIMARY KEY,
@@ -202,7 +202,7 @@ CREATE TABLE "meeting_invitees" (
 CREATE UNIQUE INDEX "meeting_invitees_meeting_id_user_id_key" ON "meeting_invitees"("meeting_id", "user_id");
 CREATE INDEX "meeting_invitees_user_id_idx" ON "meeting_invitees"("user_id");
 
--- ───────────────────────────── minutes and MoM ─────────────────────────────
+-- ----------------------------- minutes and MoM -----------------------------
 
 CREATE TABLE "minutes" (
   "id"             TEXT PRIMARY KEY,
@@ -258,7 +258,7 @@ CREATE TABLE "mom_history" (
 );
 CREATE INDEX "mom_history_mom_id_idx" ON "mom_history"("mom_id");
 
--- ──────────────────── actions and clarifications ────────────────────
+-- -------------------- actions and clarifications --------------------
 
 CREATE TABLE "items" (
   "id"              TEXT PRIMARY KEY,
@@ -316,7 +316,7 @@ CREATE TABLE "item_updates" (
 );
 CREATE INDEX "item_updates_item_id_idx" ON "item_updates"("item_id");
 
--- ─────────────────────────── files and documents ───────────────────────────
+-- --------------------------- files and documents ---------------------------
 
 CREATE TABLE "stored_files" (
   "id"             TEXT PRIMARY KEY,
@@ -349,7 +349,7 @@ CREATE TABLE "documents" (
 CREATE INDEX "documents_project_id_idx" ON "documents"("project_id");
 CREATE INDEX "documents_meeting_id_idx" ON "documents"("meeting_id");
 
--- ───────────────────────── notifications and audit ─────────────────────────
+-- ------------------------- notifications and audit -------------------------
 
 CREATE TABLE "notifications" (
   "id"                TEXT PRIMARY KEY,
@@ -398,7 +398,7 @@ CREATE TABLE "audit_entries" (
 CREATE INDEX "audit_entries_object_type_object_id_idx" ON "audit_entries"("object_type", "object_id");
 CREATE INDEX "audit_entries_createdAt_idx" ON "audit_entries"("createdAt");
 
--- ───────────────────────────── foreign keys ─────────────────────────────
+-- ----------------------------- foreign keys -----------------------------
 
 ALTER TABLE "ulbs" ADD CONSTRAINT "ulbs_project_id_fkey"
   FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -485,7 +485,7 @@ ALTER TABLE "dispatches" ADD CONSTRAINT "dispatches_notification_id_fkey"
 ALTER TABLE "audit_entries" ADD CONSTRAINT "audit_entries_actor_id_fkey"
   FOREIGN KEY ("actor_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- ═══════════════════════ the two invariants (P0-04) ═══════════════════════
+-- ======================= the two invariants (P0-04) =======================
 
 -- One table, two shapes. The API validates with a zod discriminated union; this
 -- is the half that holds even when a service is wrong.

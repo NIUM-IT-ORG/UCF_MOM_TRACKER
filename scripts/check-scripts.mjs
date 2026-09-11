@@ -11,6 +11,12 @@
  * So: .ps1 files must be ASCII-only, CRLF, and carry a UTF-8 BOM. .bat files
  * must be ASCII-only and CRLF (cmd.exe does not want a BOM).
  *
+ * Migration SQL is checked too, for a different reason with the same shape: a
+ * cluster created on an English-Windows machine defaults to WIN1252, and a
+ * box-drawing character in a comment is then unsendable - "no equivalent in
+ * encoding WIN1252". Development clusters are forced to UTF8 now, but the
+ * migrations should not depend on that.
+ *
  *   pnpm check:scripts
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -28,6 +34,8 @@ function walk(dir) {
       walk(full);
     } else if (/\.(ps1|bat|cmd)$/i.test(entry)) {
       check(full);
+    } else if (/\.sql$/i.test(entry)) {
+      checkSql(full);
     }
   }
 }
@@ -69,6 +77,23 @@ function check(file) {
   }
 }
 
+/** Migration SQL must be ASCII, so it applies to a cluster of any encoding. */
+function checkSql(file) {
+  const rel = relative(root, file);
+  const buf = readFileSync(file);
+  for (let i = 0; i < buf.length; i += 1) {
+    const byte = buf[i];
+    if (byte !== undefined && byte > 0x7f) {
+      const line = buf.subarray(0, i).toString('latin1').split('\n').length;
+      problems.push(
+        `${rel}:${line}: non-ASCII byte 0x${byte.toString(16)} - SQL must be ASCII, ` +
+          'or it cannot be applied to a WIN1252 cluster',
+      );
+      return;
+    }
+  }
+}
+
 walk(root);
 
 if (problems.length > 0) {
@@ -77,4 +102,4 @@ if (problems.length > 0) {
   console.error('\nSee the note at the top of scripts/windows/install.ps1.');
   process.exit(1);
 }
-console.log('Windows scripts are ASCII, CRLF, and correctly BOM-ed.');
+console.log('Scripts are ASCII/CRLF/BOM-correct, and the SQL is ASCII.');

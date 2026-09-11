@@ -21,7 +21,7 @@
  * than starting it once and forgetting about it.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,20 +85,46 @@ async function open() {
   const mod = await import(`file://${entry}`);
   const EmbeddedPostgres = mod.default ?? mod;
 
-  const pg = new EmbeddedPostgres({
-    databaseDir: dataDir,
-    user: LOCAL_DB.user,
-    password: LOCAL_DB.password,
-    port: LOCAL_DB.port,
-    persistent: true,
-  });
+  const make = () =>
+    new EmbeddedPostgres({
+      databaseDir: dataDir,
+      user: LOCAL_DB.user,
+      password: LOCAL_DB.password,
+      port: LOCAL_DB.port,
+      persistent: true,
+      /*
+       * Without this, initdb takes its encoding from the machine's locale. On
+       * an English-Windows box that is WIN1252, and WIN1252 cannot represent a
+       * rupee sign, a Telugu character, or half the punctuation in the seed
+       * data - so writes fail with "no equivalent in encoding WIN1252". The
+       * database this ships onto will be UTF8; the development one has to
+       * match, or bugs appear on the server that nobody can reproduce locally.
+       */
+      initdbFlags: ['--encoding=UTF8', '--locale=C'],
+    });
+
+  let pg = make();
 
   if (!existsSync(dataDir)) {
-    say('Creating the database cluster in var/pgdata.');
+    say('Creating the database cluster in var/pgdata (UTF8).');
     await pg.initialise();
   }
 
   await pg.start();
+
+  // An older cluster may predate the UTF8 flag above. It holds nothing but
+  // seed data, so recreating it is the right trade - and leaving it would mean
+  // failures at random later, whenever a character it cannot store turns up.
+  const encoding = await serverEncoding();
+  if (encoding !== 'UTF8') {
+    say(`The existing cluster is ${encoding}, which cannot hold the seed data.`);
+    say('Recreating it as UTF8. Nothing but demo data is lost.');
+    await pg.stop();
+    rmSync(dataDir, { recursive: true, force: true });
+    pg = make();
+    await pg.initialise();
+    await pg.start();
+  }
 
   // Ask before creating, rather than creating and catching the failure.
   // embedded-postgres opens a client for createDatabase and does not close it
@@ -112,7 +138,27 @@ async function open() {
   return pg;
 }
 
+/** The cluster's own encoding, read from the template database. */
+async function serverEncoding() {
+  return withAdmin(async (admin) => {
+    const r = await admin.query(
+      "SELECT pg_encoding_to_char(encoding) AS enc FROM pg_database WHERE datname = 'template1'",
+    );
+    return r.rows[0]?.enc ?? 'UNKNOWN';
+  });
+}
+
 async function databaseExists() {
+  return withAdmin(async (admin) => {
+    const r = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [
+      LOCAL_DB.database,
+    ]);
+    return (r.rowCount ?? 0) > 0;
+  });
+}
+
+/** Opens a short-lived connection to the maintenance database, and closes it. */
+async function withAdmin(fn) {
   const { Client } = await import('pg');
   const admin = new Client({
     host: LOCAL_DB.host,
@@ -123,10 +169,7 @@ async function databaseExists() {
   });
   await admin.connect();
   try {
-    const r = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [
-      LOCAL_DB.database,
-    ]);
-    return (r.rowCount ?? 0) > 0;
+    return await fn(admin);
   } finally {
     await admin.end();
   }
