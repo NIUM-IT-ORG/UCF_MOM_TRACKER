@@ -57,7 +57,7 @@ export default tseslint.config(
   },
   {
     // Seeds, scripts and tests legitimately log and use loose typing at the edges.
-    files: ['prisma/**/*.{ts,mjs}', 'scripts/**/*.ts', '**/*.spec.ts', '**/*.test.ts'],
+    files: ['prisma/**/*.{ts,mjs}', 'scripts/**/*.{ts,mjs}', '**/*.spec.ts', '**/*.test.ts'],
     rules: {
       'no-console': 'off',
     },

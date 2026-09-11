@@ -32,6 +32,13 @@ jobs:
       - run: pnpm --filter @mom/shared build
       - run: pnpm lint
       - run: pnpm typecheck
+
+      # The Windows setup scripts must stay ASCII, CRLF and correctly BOM-ed.
+      # A UTF-8 .ps1 without a BOM is decoded as ANSI by Windows PowerShell,
+      # and the resulting mojibake contains curly quotes that it treats as real
+      # string delimiters. This broke setup once; it will not again.
+      - run: pnpm check:scripts
+
       - run: pnpm test:unit
 
   # Migrations must apply cleanly to an empty database on every commit, and the
@@ -74,6 +81,11 @@ jobs:
 
       - name: Apply migrations to an empty database
         run: pnpm db:deploy
+
+      # The engine-free fallback must stay working, and must be idempotent —
+      # it is what gets a developer moving when a proxy blocks Prisma's CDN.
+      - name: The fallback migrator agrees there is nothing left to do
+        run: pnpm db:apply
 
       - name: Seed the prototype dataset
         run: pnpm db:seed

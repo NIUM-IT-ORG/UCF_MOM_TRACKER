@@ -135,9 +135,21 @@ pnpm assert:invariants   # re-check the two database guarantees
 
 ## When something does not work
 
-**`prisma generate` fails on install.** It downloads a query engine binary from
-`binaries.prisma.sh`. If a corporate proxy blocks it, set `HTTPS_PROXY` and
-retry; nothing else in the stack needs that host.
+**`prisma generate` fails on install, or `pnpm db:deploy` cannot start.**
+Prisma downloads its engine binaries from `binaries.prisma.sh`, and some
+corporate networks block that host. If you are behind a proxy, set `HTTPS_PROXY`
+and run `pnpm install` again — nothing else in the stack needs that host.
+
+If it stays blocked, the migrations are plain SQL and do not need the engine:
+
+```powershell
+pnpm db:apply      # applies prisma/migrations directly, same bookkeeping
+pnpm db:seed
+```
+
+That gets you a correct database. The API still needs the query engine to
+*run*, so the host has to be reachable before `pnpm dev` will work — but you
+can get everything else in place while that is sorted out.
 
 **`pnpm db:deploy` says the database does not exist.** The `CREATE DATABASE`
 step in part 1 did not run, or `DATABASE_URL` points somewhere else. Check the

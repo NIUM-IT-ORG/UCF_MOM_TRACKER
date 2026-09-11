@@ -1,7 +1,51 @@
 @echo off
-REM Starts the API and the web application together.
-REM Double-click this file.
+REM ====================================================================
+REM  Starts the API on :4000 and the web application on :3000, together.
+REM  Both run in this window. Ctrl+C stops both.
+REM ====================================================================
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\windows\run.ps1"
+
+if not exist ".env" (
+  echo.
+  echo   No .env found. Run SETUP.bat first.
+  echo.
+  pause
+  exit /b 1
+)
+if not exist "node_modules" (
+  echo.
+  echo   Dependencies are not installed. Run SETUP.bat first.
+  echo.
+  pause
+  exit /b 1
+)
+
+REM PostgreSQL's bin folder is not on PATH by default. The app does not need
+REM psql, but the pnpm db:* scripts do, so make it available anyway.
+where psql >nul 2>&1
+if errorlevel 1 (
+  for /f "delims=" %%d in ('dir /b /ad /o-n "C:\Program Files\PostgreSQL" 2^>nul') do (
+    if exist "C:\Program Files\PostgreSQL\%%d\bin\psql.exe" (
+      set "PATH=C:\Program Files\PostgreSQL\%%d\bin;!PATH!"
+      goto :gotpsql
+    )
+  )
+)
+:gotpsql
+
+echo.
+echo   Starting MoM_Tracker
+echo   Web  http://localhost:3000
+echo   API  http://localhost:4000/api/v1/health
+echo   Ctrl+C stops both.
+echo.
+
+REM Open the browser shortly after the servers start. Fire and forget, so it
+REM cannot hold up or interfere with them.
+start "" /b cmd /c "timeout /t 14 /nobreak >nul & start """" http://localhost:3000"
+
+call pnpm dev
+
 echo.
 pause

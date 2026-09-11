@@ -21,9 +21,11 @@
     "db:down": "docker compose down",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:apply": "node scripts/apply-migrations.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "assert:invariants": "tsx scripts/assert-invariants.ts",
     "assert:seed": "tsx scripts/assert-seed.ts",
+    "check:scripts": "node scripts/check-scripts.mjs",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate"
