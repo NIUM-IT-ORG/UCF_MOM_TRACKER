@@ -1,7 +1,29 @@
 # Setting up on Windows, without Docker
 
 You said Node is installed and Docker is not, so this is the path that needs
-neither Docker Desktop nor WSL. Two installs, five commands.
+neither Docker Desktop nor WSL.
+
+## The short way
+
+Double-click **`SETUP.bat`** in the repository root.
+
+It checks Node, enables pnpm, finds (or offers to install) PostgreSQL, creates
+the role and database, writes a `.env` with freshly generated secrets, installs
+everything, applies the migration, loads the demo data, proves the two database
+guarantees hold, and offers to start the application. It is safe to run more
+than once — each step is skipped if it has already been done.
+
+After that, **`RUN.bat`** starts it, and opens <http://localhost:3000> for you.
+
+The only thing it will ask you for is the **postgres superuser password** — the
+one set when PostgreSQL was installed.
+
+If it stops with an error, it says exactly what to fix and changes nothing else.
+The rest of this document is the same thing done by hand.
+
+---
+
+## The long way — two installs, five commands
 
 Everything the compose file would have provided has a local equivalent, chosen
 so that nothing extra has to be running:

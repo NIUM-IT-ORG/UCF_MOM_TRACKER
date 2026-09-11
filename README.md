@@ -8,7 +8,11 @@ Phase 0 is complete: workspace, database, migration, seed, both applications, CI
 
 ## Get it running
 
-Windows without Docker — the two installs and five commands are in **[`SETUP-WINDOWS.md`](SETUP-WINDOWS.md)**. Short version:
+**On Windows: double-click `SETUP.bat`, then `RUN.bat`.** Setup checks what is installed, prepares
+the database, installs everything, migrates, seeds, verifies, and offers to start. It asks for one
+thing — the postgres superuser password — and is safe to run more than once.
+
+By hand, or on any other platform:
 
 ```bash
 cp .env.example .env      # then set DATABASE_URL and the two JWT secrets
@@ -19,7 +23,9 @@ pnpm assert:invariants     # prove the two database guarantees
 pnpm dev                  # api :4000 · web :3000
 ```
 
-If Docker is available, `pnpm db:up` brings up PostgreSQL, Redis, MinIO and Mailpit instead of installing PostgreSQL natively.
+Full steps, and what to do when something does not work: **[`SETUP-WINDOWS.md`](SETUP-WINDOWS.md)**.
+If Docker is available, `pnpm db:up` brings up PostgreSQL, Redis, MinIO and Mailpit instead of
+installing PostgreSQL natively.
 
 ---
 
@@ -27,6 +33,7 @@ If Docker is available, `pnpm db:up` brings up PostgreSQL, Redis, MinIO and Mail
 
 ```
 MoM_Tracker/
+├─ SETUP.bat · RUN.bat     double-click setup, then double-click run
 ├─ CLAUDE.md               the build contract — read it first
 ├─ SETUP-WINDOWS.md        local setup without Docker
 ├─ docs/                   the specification, 00 to 12
@@ -35,7 +42,7 @@ MoM_Tracker/
 ├─ packages/shared/        enums, capabilities, zod DTOs — used by both apps
 ├─ apps/api/               NestJS
 ├─ apps/web/               Next.js
-├─ scripts/                the two CI assertions
+├─ scripts/                the two CI assertions, and the Windows setup scripts
 └─ .github/workflows/ci.yml
 ```
 
