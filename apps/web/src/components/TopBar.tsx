@@ -2,10 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
-
-interface Props {
-  user?: { name: string; initials: string; designation: string; colour: string };
-}
+import { useSession } from '@/lib/session';
 
 /**
  * The breadcrumb is derived from the route rather than passed in, so it can
@@ -23,8 +20,22 @@ function useCrumb(): { section: string; page: string } {
   return { section: 'UCF Tracker', page: 'Not found' };
 }
 
-export function TopBar({ user }: Props) {
+/** A stable colour per designation, so the same officer always looks the same. */
+const BAND_COLOUR: Record<string, string> = {
+  MD: '#BF3B2B',
+  AMD: '#BF3B2B',
+  PDMC: '#D9772B',
+  MC: '#2E5FA3',
+  PD: '#B2427A',
+  ULB: '#7D3C98',
+  CDMA: '#5E7DAA',
+  SYS: '#64707F',
+  EXT: '#8C857A',
+};
+
+export function TopBar() {
   const { section, page } = useCrumb();
+  const { user, signOut } = useSession();
 
   return (
     <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-3 border-b border-line bg-card px-[22px] py-[9px]">
@@ -46,21 +57,34 @@ export function TopBar({ user }: Props) {
         </button>
 
         {user ? (
-          <div className="flex items-center gap-[9px] rounded-[22px] border border-line bg-white py-[5px] pl-[5px] pr-3">
-            <span
-              className="grid h-[29px] w-[29px] place-items-center rounded-full text-[11px] font-bold text-white"
-              style={{ background: user.colour }}
-              aria-hidden="true"
+          <>
+            <div className="flex items-center gap-[9px] rounded-[22px] border border-line bg-white py-[5px] pl-[5px] pr-3">
+              <span
+                className="grid h-[29px] w-[29px] place-items-center rounded-full text-[11px] font-bold text-white"
+                style={{ background: BAND_COLOUR[user.designation.code] ?? '#5E7DAA' }}
+                aria-hidden="true"
+              >
+                {user.initials}
+              </span>
+              <span>
+                <b className="block text-xs leading-tight">{user.name}</b>
+                <small className="text-[9.5px] font-bold text-accent">
+                  {user.designation.name}
+                </small>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-[9px] border border-line bg-white px-3 py-2 text-[12px] font-semibold text-navy hover:border-steel"
             >
-              {user.initials}
-            </span>
-            <span>
-              <b className="block text-xs leading-tight">{user.name}</b>
-              <small className="text-[9.5px] font-bold text-accent">{user.designation}</small>
-            </span>
-          </div>
+              Sign out
+            </button>
+          </>
         ) : (
-          <span className="text-[12px] text-muted">Not signed in</span>
+          <a href="/login" className="text-[12px] font-semibold">
+            Sign in
+          </a>
         )}
       </div>
     </header>

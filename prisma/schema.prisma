@@ -208,6 +208,10 @@ model User {
   createdMeetings Meeting[]      @relation("MeetingCreatedBy")
   auditEntries  AuditEntry[]
   notifications Notification[]
+  sessions      Session[]
+  otpChallenges OtpChallenge[]
+  /// Locked until this instant after repeated failed sign-ins.
+  lockedUntil   DateTime?        @map("locked_until")
 
   @@index([designationId])
   @@index([departmentId])
@@ -618,4 +622,64 @@ model AuditEntry {
   @@index([objectType, objectId])
   @@index([createdAt])
   @@map("audit_entries")
+}
+
+// ───────────────────────── authentication ─────────────────────────
+
+/// One row per refresh token ever issued. Rotation writes a new row and marks
+/// the old one replaced; a replayed token is then detectable, and the whole
+/// family is revoked. See docs/04-RBAC.md §6.
+model Session {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  /// Every token descended from one login shares a family id.
+  familyId     String    @map("family_id")
+  /// SHA-256 of the refresh token. The token itself is never stored.
+  tokenHash    String    @unique @map("token_hash")
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address")
+  expiresAt    DateTime  @map("expires_at")
+  /// Set when this token is rotated away or the session is revoked.
+  revokedAt    DateTime? @map("revoked_at")
+  revokedReason String?  @map("revoked_reason")
+  replacedById String?   @map("replaced_by_id")
+  lastUsedAt   DateTime? @map("last_used_at")
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("sessions")
+}
+
+/// A one-time code issued after the password step. Short-lived, single-use,
+/// attempt-limited, and never stored in the clear.
+model OtpChallenge {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  codeHash   String    @map("code_hash")
+  expiresAt  DateTime  @map("expires_at")
+  attempts   Int       @default(0)
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_challenges")
+}
+
+/// Failed sign-in attempts, for the five-strikes lockout. Successful logins
+/// clear the count; the lock itself is written to the audit trail.
+model LoginAttempt {
+  id         String   @id @default(cuid())
+  email      String
+  userId     String?  @map("user_id")
+  succeeded  Boolean
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@map("login_attempts")
 }

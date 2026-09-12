@@ -10,6 +10,7 @@
  */
 import 'dotenv/config';
 import { Client } from 'pg';
+import { SEED_DESIGNATION_CAPS } from '@mom/shared';
 
 interface Check {
   what: string;
@@ -135,14 +136,43 @@ async function main(): Promise<void> {
 
   let failures = 0;
   try {
+    /*
+     * The capability matrix in the database must equal the one in
+     * packages/shared. They drifted once - the seed was taking the matrix from
+     * the prototype fixture, so a capability existed in the code and was
+     * granted to nobody - and the symptom was a button that never appeared for
+     * anyone, with nothing in any log to explain it.
+     */
+    const rows = await db.query<{ code: string; caps: string[] }>(
+      'SELECT code, caps FROM designations',
+    );
+    for (const row of rows.rows) {
+      const expected = SEED_DESIGNATION_CAPS[row.code];
+      if (!expected) {
+        failures += 1;
+        console.error(`  x designation ${row.code} has no grant in packages/shared`);
+        continue;
+      }
+      const actual = [...row.caps].sort().join(',');
+      const wanted = [...expected].sort().join(',');
+      if (actual === wanted) {
+        console.log(`  + ${row.code} capabilities match packages/shared (${expected.length})`);
+      } else {
+        failures += 1;
+        console.error(`  x ${row.code} capabilities differ from packages/shared`);
+        console.error(`      database: ${actual || '(none)'}`);
+        console.error(`      expected: ${wanted || '(none)'}`);
+      }
+    }
+
     for (const check of CHECKS) {
       const r = await db.query<{ count: string }>(check.sql);
       const actual = Number(r.rows[0]?.count ?? -1);
       if (actual === check.expected) {
-        console.log(`  ✓ ${check.what}: ${actual}`);
+        console.log(`  + ${check.what}: ${actual}`);
       } else {
         failures += 1;
-        console.error(`  ✗ ${check.what}: expected ${check.expected}, found ${actual}`);
+        console.error(`  x ${check.what}: expected ${check.expected}, found ${actual}`);
       }
     }
   } finally {

@@ -16,6 +16,8 @@
  * necessarily run, and in CI where the client may not be built yet.
  */
 import 'dotenv/config';
+import argon2 from 'argon2';
+import { SEED_DESIGNATION_CAPS } from '@mom/shared';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -219,6 +221,16 @@ const e164 = (mob: string): string => mob.replace(/\s+/g, '');
 const TODAY = data.TODAY;
 const NOW = new Date(`${TODAY}T09:00:00.000Z`);
 
+/**
+ * The demo password, shared by every seeded officer who can sign in.
+ *
+ * DEVELOPMENT ONLY. It exists so the phase demos can be walked through without
+ * anyone inventing credentials, and it is the same for everyone precisely so
+ * that nobody mistakes it for a real one. The seed never runs against a
+ * production database - `pnpm db:seed` truncates every table first.
+ */
+const DEMO_PASSWORD = 'ucf-demo-2026';
+
 // ────────────────────────────────── seed ──────────────────────────────────
 
 async function main(): Promise<void> {
@@ -245,12 +257,23 @@ async function main(): Promise<void> {
       RESTART IDENTITY CASCADE
     `);
 
-    // ── designations ──
+    /*
+     * Designations, with their capabilities taken from packages/shared rather
+     * than from the fixture.
+     *
+     * The prototype carries its own copy of the matrix, and for a while the
+     * seed used it - which meant two sources of truth and a capability that
+     * existed in the code but was granted to nobody in the database. The
+     * documented matrix (docs/04-RBAC.md 2) lives in
+     * packages/shared/src/capabilities.ts, and this is where it lands.
+     */
     for (const d of data.DESIGNATIONS) {
+      const caps = SEED_DESIGNATION_CAPS[d.id];
+      if (!caps) throw new Error(`seed: no capability grant defined for designation ${d.id}`);
       await db.query(
         `INSERT INTO designations (id, code, name, band, caps, "isSystem", "createdAt", "updatedAt")
          VALUES ($1,$2,$3,$4,$5,true,$6,$6)`,
-        [id('dg', d.id), d.id, d.name, d.band, d.caps, NOW],
+        [id('dg', d.id), d.id, d.name, d.band, caps, NOW],
       );
     }
 
@@ -308,23 +331,34 @@ async function main(): Promise<void> {
     }
 
     // ── users ──
+    // One hash, reused: argon2id is deliberately slow, and hashing the same
+    // demo password fourteen times would add seconds to every seed for nothing.
+    const demoHash = await argon2.hash(DEMO_PASSWORD, {
+      type: argon2.argon2id,
+      memoryCost: 19_456,
+      timeCost: 2,
+      parallelism: 1,
+    });
+
     for (const u of data.USERS) {
       await db.query(
         `INSERT INTO users
            (id, name, initials, email, mobile, password_hash, designation_id, department_id,
             sees_all_projects, account_state, "createdAt", "updatedAt")
-         VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,$9,$10,$10)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
         [
           id('u', u.id),
           u.name,
           u.av,
           emailFor(u.name),
           e164(u.mob),
+          // External invitees get no password at all. They exist to receive
+          // notifications and be named in attendance, and must not be able to
+          // authenticate - docs/04-RBAC.md 4.
+          u.login ? demoHash : null,
           id('dg', u.dg),
           id('dept', slug(u.dept)),
           u.prj === 'ALL',
-          // No password is seeded. Phase 1 sets one; until then these accounts
-          // cannot be signed into, which is the correct default for a seed.
           u.login ? 'ACTIVE' : 'INVITE_ONLY',
           NOW,
         ],
@@ -609,6 +643,12 @@ async function main(): Promise<void> {
     const counts = await tally(db);
     console.log('Seeded the prototype dataset. Clock fixed at', TODAY);
     for (const [table, count] of counts) console.log(`  ${table.padEnd(18)} ${count}`);
+    console.log('');
+    console.log('  Sign in with any of these, password:', DEMO_PASSWORD);
+    for (const u of data.USERS.filter((x) => x.login).slice(0, 4)) {
+      console.log(`    ${emailFor(u.name).padEnd(28)} ${u.dg}`);
+    }
+    console.log('    ...and the rest, at <name>@example.gov');
   } catch (err) {
     await db.query('ROLLBACK');
     throw err;

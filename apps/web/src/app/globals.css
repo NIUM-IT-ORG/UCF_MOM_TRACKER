@@ -67,6 +67,42 @@
     padding: 22px 26px 60px;
     max-width: 1420px;
   }
+  /* Form controls and buttons, shared by the login page and every form after it. */
+  .i {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 9px 11px;
+    font-family: var(--sans);
+    font-size: 13px;
+    background: #fff;
+    color: var(--ink);
+    min-height: 38px;
+  }
+  .i:focus {
+    outline: none;
+    border-color: var(--steel);
+    box-shadow: 0 0 0 3px rgba(46, 95, 163, 0.13);
+  }
+  .btn-primary {
+    border: 0;
+    border-radius: 9px;
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-primary:hover {
+    background: var(--accent-d);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   .card {
     background: var(--card);
     border: 1px solid var(--line);

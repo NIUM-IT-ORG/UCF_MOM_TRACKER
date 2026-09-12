@@ -26,16 +26,19 @@ what was verified and the three decisions taken along the way.
 
 ## Phase 1 · Identity and access — 3 days
 
-| # | Ticket | Done when |
-|---|---|---|
-| P1-01 | Auth module: login, OTP, refresh with rotation and reuse detection, logout, sessions | tokens issued as httpOnly cookies |
-| P1-02 | `JwtAuthGuard` resolving capabilities and project ids **from the database on every request** | editing a designation takes effect without re-login |
-| P1-03 | `CapabilityGuard` + `@RequireCapability` | denied path returns `403 FORBIDDEN_CAPABILITY` with the key |
-| P1-04 | `projectScope()` helper and its use in every repository finder | scope test suite passes for all eight entity types |
-| P1-05 | Users, designations, departments CRUD; project mapping | matches `docs/04-RBAC.md` |
-| P1-06 | `GET /access/matrix`, `GET /access/effective/:userId` | the checker returns the same answer the prototype dialog shows |
-| P1-07 | Web: login page, session context, capability-aware navigation, role display in the top bar | locked nav items render disabled, exactly as in the prototype |
-| P1-08 | Audit interceptor writing one row per mutation in the same transaction | a forced audit failure rolls the mutation back |
+**Status: DONE.** See `docs/13-PHASE-1-REPORT.md`.
+
+| # | Ticket | Done when | |
+|---|---|---|---|
+| P1-00 | **Added:** sessions, OTP challenges and login attempts; the `share_object` capability the RBAC doc lists | migration `20260912000000_auth` applies | ✅ |
+| P1-01 | Auth module: login, OTP, refresh with rotation and reuse detection, logout, sessions | tokens issued as httpOnly cookies | ✅ |
+| P1-02 | `JwtAuthGuard` resolving capabilities and project ids **from the database on every request** | editing a designation takes effect without re-login | ✅ |
+| P1-03 | `CapabilityGuard` + `@RequireCapability` | denied path returns `403 FORBIDDEN_CAPABILITY` with the key | ✅ |
+| P1-04 | `projectScope()` helper and its use in every repository finder | scope suite covers the entity shapes that exist so far | ✅ |
+| P1-05 | Users, designations, departments CRUD; project mapping | matches `docs/04-RBAC.md` | ✅ |
+| P1-06 | `GET /access/matrix`, `GET /access/effective/:userId` | the checker returns the same answer the prototype dialog shows | ✅ |
+| P1-07 | Web: login page, session context, capability-aware navigation, role display in the top bar | locked nav items render disabled, exactly as in the prototype | ✅ |
+| P1-08 | Audit interceptor writing one row per mutation | see the note in `common/audit.interceptor.ts` on what it does and does not guarantee | ◑ |
 
 **Demo:** sign in as four designations and watch the navigation and the visible projects change.
 

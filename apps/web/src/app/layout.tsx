@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import type { Capability } from '@mom/shared';
-import { Sidebar } from '@/components/Sidebar';
-import { TopBar } from '@/components/TopBar';
+import { cookies } from 'next/headers';
+import type { SessionUser } from '@mom/shared';
+import { AppFrame } from '@/components/AppFrame';
+import { SessionProvider } from '@/lib/session';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -11,14 +12,32 @@ export const metadata: Metadata = {
 };
 
 /**
- * Phase 0 renders the shell with a placeholder identity so the layout can be
- * compared against the prototype. Phase 1 (P1-07) replaces this with the real
- * session — at which point `caps` comes from the server on every request, not
- * from a token claim, so an access change takes effect without re-login.
+ * Resolves the session on the server, so the first paint already knows who is
+ * signed in. Without this the navigation renders empty-handed for a moment and
+ * every capability-gated item flashes locked before settling.
  */
-const PLACEHOLDER_CAPS: Capability[] = [];
+async function currentUser(): Promise<SessionUser | null> {
+  const cookie = cookies().toString();
+  if (!cookie) return null;
+  try {
+    const base = process.env.API_URL ?? 'http://localhost:4000';
+    const res = await fetch(`${base}/api/v1/auth/me`, {
+      headers: { cookie },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data: SessionUser };
+    return body.data;
+  } catch {
+    // The API not being up is not a reason to fail the page; the dashboard
+    // reports it, and the sign-in page still works.
+    return null;
+  }
+}
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
+
   return (
     <html lang="en">
       <head>
@@ -30,15 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <div className="app-shell">
-          <Sidebar caps={PLACEHOLDER_CAPS} />
-          <main className="flex min-h-0 min-w-0 flex-col">
-            <TopBar />
-            <div className="stage">
-              <div className="content">{children}</div>
-            </div>
-          </main>
-        </div>
+        <SessionProvider initialUser={user}>
+          <AppFrame>{children}</AppFrame>
+        </SessionProvider>
       </body>
     </html>
   );

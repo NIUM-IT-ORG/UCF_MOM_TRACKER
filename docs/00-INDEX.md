@@ -16,7 +16,8 @@ Read in this order.
 | 09 | [Test plan](09-TEST-PLAN.md) | 24 must-pass assertions, six E2E journeys, performance, security |
 | 10 | [Deployment](10-DEPLOYMENT.md) | Topology, environments, release, backup, go-live checklist |
 | 11 | [Handover](11-HANDOVER.md) | What was frozen, what shipped in this pack, what is deferred and why |
-| 12 | [Phase 0 report](12-PHASE-0-REPORT.md) | **Read before Phase 1.** What was built and verified, three decisions taken, two traps already found |
+| 12 | [Phase 0 report](12-PHASE-0-REPORT.md) | What Phase 0 built and verified, three decisions taken, two traps found |
+| 13 | [Phase 1 report](13-PHASE-1-REPORT.md) | **Read before Phase 2.** Identity and access: what it enforces, four defects fixed, the demo |
 
 ## The reference build
 

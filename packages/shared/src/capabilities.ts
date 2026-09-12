@@ -1,5 +1,5 @@
 /**
- * The sixteen capabilities. This file is the only place they are defined.
+ * The seventeen capabilities. This file is the only place they are defined.
  * A capability string must never be typed as a literal anywhere else.
  *
  * Capabilities are granted to a DESIGNATION, never to a user. Data scope
@@ -23,6 +23,7 @@ export const CAPABILITIES = {
   manage_masters: 'Manage master data',
   manage_access: 'Manage access control',
   view_all_projects: 'See every project',
+  share_object: 'Share a meeting, MoM, item, document or report',
 } as const;
 
 export type Capability = keyof typeof CAPABILITIES;
@@ -35,9 +36,9 @@ export const ALL_CAPABILITIES = Object.keys(CAPABILITIES) as Capability[];
  * this constant is the starting state, not the enforcement point.
  */
 export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
-  MD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects'],
-  AMD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects'],
-  CDMA: ['view_all_projects'],
+  MD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects', 'share_object'],
+  AMD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects', 'share_object'],
+  CDMA: ['view_all_projects', 'share_object'],
   PD: [
     'add_agenda',
     'record_minutes',
@@ -46,6 +47,7 @@ export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
     'respond_clarification',
     'confirm_completion',
     'manage_project_docs',
+    'share_object',
   ],
   PDMC: [
     'plan_instant',
@@ -61,6 +63,7 @@ export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
     'upload_signed',
     'manage_project_docs',
     'view_all_projects',
+    'share_object',
   ],
   MC: [
     'plan_instant',
@@ -74,9 +77,10 @@ export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
     'respond_clarification',
     'upload_signed',
     'manage_project_docs',
+    'share_object',
   ],
-  ULB: ['add_agenda', 'update_own_item', 'respond_clarification'],
-  SYS: ['manage_masters', 'manage_access', 'view_all_projects'],
+  ULB: ['add_agenda', 'update_own_item', 'respond_clarification', 'share_object'],
+  SYS: ['manage_masters', 'manage_access', 'view_all_projects', 'share_object'],
   EXT: [],
 };
 
