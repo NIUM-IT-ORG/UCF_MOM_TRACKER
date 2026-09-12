@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { hasCapability, type Capability } from '@mom/shared';
 import { NAV } from './nav';
+import { ROADMAP } from '@/lib/roadmap';
 
 interface Props {
   /** Capabilities of the signed-in designation. Empty until Phase 1 wires auth. */
@@ -37,8 +38,17 @@ export function Sidebar({ caps }: Props) {
               const locked = item.cap ? !hasCapability(caps, item.cap) : false;
               const active =
                 item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
+              // Marked with the phase that builds it, so the sidebar reads as
+              // a plan rather than as a set of broken links.
+              const planned = ROADMAP[item.href];
               return (
-                <NavLink key={item.href} href={item.href} active={active} locked={locked}>
+                <NavLink
+                  key={item.href}
+                  href={item.href}
+                  active={active}
+                  locked={locked}
+                  phase={planned?.phase}
+                >
                   {item.label}
                 </NavLink>
               );
@@ -60,11 +70,14 @@ function NavLink({
   href,
   active,
   locked,
+  phase,
   children,
 }: {
   href: string;
   active: boolean;
   locked: boolean;
+  /** Set when the screen is not built yet; undefined once it ships. */
+  phase?: number | null;
   children: React.ReactNode;
 }) {
   const base =
@@ -79,6 +92,7 @@ function NavLink({
         title="Your designation does not have access to this"
       >
         {children}
+        {phase !== undefined && <PhaseChip phase={phase} />}
       </span>
     );
   }
@@ -92,7 +106,24 @@ function NavLink({
       }`}
     >
       {children}
+      {phase !== undefined && <PhaseChip phase={phase} />}
     </Link>
+  );
+}
+
+/** A quiet marker: this screen arrives in a later phase. */
+function PhaseChip({ phase }: { phase: number | null }) {
+  return (
+    <span
+      className="ml-auto rounded-full border border-white/20 px-[7px] py-px text-[9.5px] font-bold text-[#8FA8CC]"
+      title={
+        phase === null
+          ? 'Not yet scheduled'
+          : `Not built yet - arrives in Phase ${phase}`
+      }
+    >
+      {phase === null ? 'later' : `P${phase}`}
+    </span>
   );
 }
 

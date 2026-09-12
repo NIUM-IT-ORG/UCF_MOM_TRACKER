@@ -33,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="app-shell">
           <Sidebar caps={PLACEHOLDER_CAPS} />
           <main className="flex min-h-0 min-w-0 flex-col">
-            <TopBar crumb={<b className="text-ink">Dashboard</b>} />
+            <TopBar />
             <div className="stage">
               <div className="content">{children}</div>
             </div>

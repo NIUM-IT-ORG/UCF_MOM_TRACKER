@@ -1,12 +1,40 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { NAV } from './nav';
+
 interface Props {
-  crumb: React.ReactNode;
   user?: { name: string; initials: string; designation: string; colour: string };
 }
 
-export function TopBar({ crumb, user }: Props) {
+/**
+ * The breadcrumb is derived from the route rather than passed in, so it can
+ * never sit there saying "Dashboard" on a page that is not the dashboard.
+ */
+function useCrumb(): { section: string; page: string } {
+  const pathname = usePathname();
+  if (pathname === '/') return { section: 'Overview', page: 'Dashboard' };
+
+  const first = '/' + (pathname.split('/').filter(Boolean)[0] ?? '');
+  for (const group of NAV) {
+    const item = group.items.find((i) => i.href === first);
+    if (item) return { section: group.group, page: item.label };
+  }
+  return { section: 'UCF Tracker', page: 'Not found' };
+}
+
+export function TopBar({ user }: Props) {
+  const { section, page } = useCrumb();
+
   return (
     <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-3 border-b border-line bg-card px-[22px] py-[9px]">
-      <div className="text-[12.5px] text-muted">{crumb}</div>
+      <nav aria-label="Breadcrumb" className="text-[12.5px] text-muted">
+        {section}
+        <span aria-hidden="true" className="px-1.5 text-line">
+          /
+        </span>
+        <b className="text-ink">{page}</b>
+      </nav>
 
       <div className="ml-auto flex flex-wrap items-center gap-[9px]">
         <button
