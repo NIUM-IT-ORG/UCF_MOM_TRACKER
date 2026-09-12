@@ -18,7 +18,8 @@ Read in this order.
 | 11 | [Handover](11-HANDOVER.md) | What was frozen, what shipped in this pack, what is deferred and why |
 | 12 | [Phase 0 report](12-PHASE-0-REPORT.md) | What Phase 0 built and verified, three decisions taken, two traps found |
 | 13 | [Phase 1 report](13-PHASE-1-REPORT.md) | Identity and access: what it enforces, four defects fixed, the demo |
-| 14 | [Phase 2 report](14-PHASE-2-REPORT.md) | **Read before Phase 3.** Masters: projects, ULBs, files, documents, people — three defects fixed, one open question for the client |
+| 14 | [Phase 2 report](14-PHASE-2-REPORT.md) | Masters: projects, ULBs, files, documents, people — three defects fixed, one open question for the client |
+| 15 | [Phases 3 & 4 report](15-PHASE-3-4-REPORT.md) | **Read before Phase 5.** Meetings, minutes, items and the MoM — the working core; three defects fixed, both demos walked |
 
 ## The reference build
 

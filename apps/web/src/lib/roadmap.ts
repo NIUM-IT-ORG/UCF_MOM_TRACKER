@@ -37,28 +37,6 @@ export const ROADMAP: Record<string, Planned> = {
     blurb:
       'Months you can step through, colour-coded conducted / upcoming / planning / instant, with the pipeline and recently-held lists beside it.',
   },
-  '/meetings': {
-    phase: 3,
-    tickets: ['P3-09', 'P3-10'],
-    title: 'Meetings',
-    blurb:
-      'The list and both journeys: an instant meeting the coordinator composes and launches in one pass, and the four-step scheduled wizard. Then the five tabs on a held meeting — agenda, attendance, items, documents, signed MoM.',
-  },
-  '/minutes': {
-    phase: 4,
-    tickets: ['P4-01', 'P4-11'],
-    title: 'Minutes editor',
-    blurb:
-      'A rich-text editor, sanitised server-side and versioned, with the typed entry form beside it: one dropdown switches between an Action and a Clarification and the form changes with it.',
-    cap: 'record_minutes',
-  },
-  '/mom': {
-    phase: 4,
-    tickets: ['P4-06', 'P4-07', 'P4-12'],
-    title: 'MoM register',
-    blurb:
-      'Generate, submit, approve or return, sign and circulate — with the A4 document, the DRAFT watermark and the approval console. Circulation is what makes the action items live.',
-  },
   '/register': {
     phase: 6,
     tickets: ['P6-03'],

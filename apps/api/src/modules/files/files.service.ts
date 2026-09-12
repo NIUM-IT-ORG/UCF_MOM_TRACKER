@@ -111,11 +111,27 @@ export class FilesService {
     return { ...file, bytes: await this.storage.get(file.objectKey) };
   }
 
-  /** Used by the documents service: a document may not point at empty bytes. */
-  async requireUploaded(fileId: string): Promise<void> {
+  /**
+   * The file, proven to have bytes. A document may not point at a reservation
+   * nobody completed.
+   *
+   * Returns the row rather than nothing, because every caller that cares
+   * whether a file arrived also cares what it is — the signed MoM has to be a
+   * PDF — and a second query to find that out is a second chance for the two
+   * answers to disagree.
+   */
+  async requireUploaded(fileId: string) {
     const file = await this.prisma.storedFile.findUnique({
       where: { id: fileId },
-      select: { uploadedAt: true },
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        sha256: true,
+        uploadedAt: true,
+        uploadedById: true,
+      },
     });
     if (!file) throw new AppError('VALIDATION_FAILED', 'That file does not exist.', { field: 'fileId' });
     if (!file.uploadedAt) {
@@ -125,6 +141,7 @@ export class FilesService {
         { field: 'fileId' },
       );
     }
+    return file;
   }
 }
 

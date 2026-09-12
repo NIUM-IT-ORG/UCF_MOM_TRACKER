@@ -43,6 +43,7 @@ export const updateMeetingDto = z
     projectIds: z.array(cuid).min(1).optional(),
   })
   .strict();
+export type UpdateMeetingDto = z.infer<typeof updateMeetingDto>;
 
 export const agendaItemDto = z
   .object({
@@ -50,6 +51,7 @@ export const agendaItemDto = z
     projectId: cuid.optional(),
   })
   .strict();
+export type AgendaItemDto = z.infer<typeof agendaItemDto>;
 
 /**
  * Carrying an item forward a second time requires a new date. Without this the
@@ -62,18 +64,22 @@ export const carryDto = z
       .min(1),
   })
   .strict();
+export type CarryDto = z.infer<typeof carryDto>;
 
 export const inviteesDto = z.object({ userIds: z.array(cuid) }).strict();
+export type InviteesDto = z.infer<typeof inviteesDto>;
 
 export const rsvpDto = z
   .object({ response: z.enum(['ACCEPTED', 'TENTATIVE', 'DECLINED']) })
   .strict();
+export type RsvpDto = z.infer<typeof rsvpDto>;
 
 export const attendanceDto = z
   .object({
     marks: z.record(cuid, z.enum(['PRESENT', 'VIRTUAL', 'ABSENT'])),
   })
   .strict();
+export type AttendanceDto = z.infer<typeof attendanceDto>;
 
 export const rescheduleDto = z
   .object({
@@ -83,12 +89,17 @@ export const rescheduleDto = z
     reason: requiredRemark,
   })
   .strict();
+export type RescheduleDto = z.infer<typeof rescheduleDto>;
 
 export const cancelDto = z.object({ reason: requiredRemark }).strict();
+export type CancelDto = z.infer<typeof cancelDto>;
 
 export const minutesDto = z
   .object({ bodyHtml: z.string().min(1) })
   .strict();
+export type MinutesDto = z.infer<typeof minutesDto>;
 
 export const momDecisionDto = z.object({ remark: requiredRemark }).strict();
+export type MomDecisionDto = z.infer<typeof momDecisionDto>;
 export const momSignDto = z.object({ fileId: cuid }).strict();
+export type MomSignDto = z.infer<typeof momSignDto>;

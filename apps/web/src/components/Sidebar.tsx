@@ -60,7 +60,7 @@ export function Sidebar({ caps }: Props) {
       <div className="flex-none border-t border-white/10 px-4 py-[11px] text-[10px] leading-relaxed text-[#7E93B8]">
         Urban Challenge Fund
         <br />
-        <b className="text-[#A5BEE3]">Phase 2 · masters</b>
+        <b className="text-[#A5BEE3]">Phase 4 · minutes &amp; MoM</b>
       </div>
     </aside>
   );

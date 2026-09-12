@@ -60,39 +60,44 @@ what was verified and the three decisions taken along the way.
 
 ## Phase 3 · Meetings — 5 days
 
-| # | Ticket | Done when |
-|---|---|---|
-| P3-01 | Meeting entity, code generator `UCF/<scope>/<RM\|IM>-nn`, both state machines | every transition in `docs/05` is covered by a test, illegal ones return `409` |
-| P3-02 | Instant flow: create, launch, end | launch emits `MTG-02` |
-| P3-03 | Scheduled flow: plan, agenda, invitees, invitee inputs, confirm | confirm emits `MTG-01` |
-| P3-04 | Carry-forward: candidates, selection, agenda item 0, `carryCount`, mandatory revised due on the second carry | `422 REVISED_DUE_REQUIRED` fires correctly |
-| P3-05 | Agenda freeze job and the guard | invitee POST after the freeze returns `409 AGENDA_FROZEN` |
-| P3-06 | RSVP; attendance with Present / Virtual / Absent and walk-ins | |
-| P3-07 | Reschedule and cancel with mandatory reasons | both re-notify |
-| P3-08 | Agenda PDF | |
-| P3-09 | Web: meetings list with all filters; the type chooser; the instant composer; the four-step scheduled wizard | matches the prototype |
-| P3-10 | Web: meeting detail with the five tabs — Agenda, Attendance, Actions/Clarifications, Documents, Signed MoM | tab state in the URL |
+**Status: DONE.** See `docs/15-PHASE-3-4-REPORT.md`.
 
-**Demo:** run both journeys end to end, from creation to attendance.
+| # | Ticket | Done when | |
+|---|---|---|---|
+| P3-01 | Meeting entity, code generator `UCF/<scope>/<RM\|IM>-nn`, both state machines | every transition in `docs/05` is covered by a test, illegal ones return `409` | ✅ |
+| P3-02 | Instant flow: create, launch, end | launch emits `MTG-02` | ✅ |
+| P3-03 | Scheduled flow: plan, agenda, invitees, invitee inputs, confirm | confirm emits `MTG-01` | ✅ |
+| P3-04 | Carry-forward: candidates, selection, agenda item 0, `carryCount`, mandatory revised due on the second carry | `422 REVISED_DUE_REQUIRED` fires correctly | ✅ |
+| P3-05 | Agenda freeze job and the guard | invitee POST after the freeze returns `409 AGENDA_FROZEN` | ◑ |
+| P3-06 | RSVP; attendance with Present / Virtual / Absent and walk-ins | | ✅ |
+| P3-07 | Reschedule and cancel with mandatory reasons | both re-notify | ✅ |
+| P3-08 | Agenda PDF | | ◑ |
+| P3-09 | Web: meetings list with all filters; the type chooser; the instant composer; the four-step scheduled wizard | matches the prototype | ✅ |
+| P3-10 | Web: meeting detail with the five tabs — Agenda, Attendance, Actions/Clarifications, Documents, Signed MoM | tab state in the URL | ✅ |
+
+**Demo:** run both journeys end to end, from creation to attendance. — walked in a browser; see the report §4.
 
 ## Phase 4 · Minutes, items, MoM — 5 days
 
-| # | Ticket | Done when |
-|---|---|---|
-| P4-01 | Minutes with server-side HTML sanitisation and versioning | a pasted Word document loses every style and keeps its structure |
-| P4-02 | Items module, discriminated validation, joint ownership | an action without owners or a due date is rejected |
-| P4-03 | Action state machine including `resolveConfirmers` **stubbed for the undecided priority routing** | the stub is a single named function with a comment |
-| P4-04 | Self-confirmation guard | `403 SELF_CONFIRMATION` |
-| P4-05 | Clarification state machine, Open → Responded → Closed | |
-| P4-06 | MoM state machine, versions, history | every transition tested |
-| P4-07 | MoM PDF: A4, DRAFT watermark until signed, full header block, Raised by in both tables, signature block | byte-compare against the reference PDF in `docs/reference/` |
-| P4-08 | Signed upload with the page-count and action-row check | mismatch returns `422 SIGNED_MOM_MISMATCH` |
-| P4-09 | **Circulation activates items** and fires `ACT-01` + `MOM-05` in one transaction | items are inert before, live after |
-| P4-10 | Corrigendum as a new linked MoM | a circulated MoM cannot be mutated |
-| P4-11 | Web: minutes editor route; typed entry form switching Action ⇄ Clarification; multi-select owners | matches the prototype |
-| P4-12 | Web: MoM register with state tabs, approval console, signed upload, circulation log | |
+**Status: DONE.** See `docs/15-PHASE-3-4-REPORT.md`.
 
-**Demo:** minute a meeting, raise three actions and a clarification, generate, submit, approve, sign, circulate — and watch the register light up.
+| # | Ticket | Done when | |
+|---|---|---|---|
+| P4-00 | **Added:** a circulated MoM is immutable, so a corrigendum is a new row | migration `20260914000000_mom_versions` applies | ✅ |
+| P4-01 | Minutes with server-side HTML sanitisation and versioning | a pasted Word document loses every style and keeps its structure | ✅ |
+| P4-02 | Items module, discriminated validation, joint ownership | an action without owners or a due date is rejected | ✅ |
+| P4-03 | Action state machine including `resolveConfirmers` **stubbed for the undecided priority routing** | the stub is a single named function with a comment | ✅ |
+| P4-04 | Self-confirmation guard | `403 SELF_CONFIRMATION` | ✅ |
+| P4-05 | Clarification state machine, Open → Responded → Closed | | ✅ |
+| P4-06 | MoM state machine, versions, history | every transition tested | ✅ |
+| P4-07 | MoM document: A4, DRAFT watermark until signed, full header block, Raised by in both tables, signature block | matches `prototype/Sample-MoM-draft.pdf` | ◑ |
+| P4-08 | Signed upload with the page-count and action-row check | mismatch returns `422 SIGNED_MOM_MISMATCH` | ◑ |
+| P4-09 | **Circulation activates items** and fires `ACT-01` + `MOM-05` in one transaction | items are inert before, live after | ✅ |
+| P4-10 | Corrigendum as a new linked MoM | a circulated MoM cannot be mutated | ✅ |
+| P4-11 | Web: minutes editor route; typed entry form switching Action ⇄ Clarification; multi-select owners | matches the prototype | ✅ |
+| P4-12 | Web: MoM register with state tabs, approval console, signed upload, circulation log | | ✅ |
+
+**Demo:** minute a meeting, raise three actions and a clarification, generate, submit, approve, sign, circulate — and watch the register light up. — walked in a browser; see the report §4.
 
 ## Phase 5 · Notifications, email and WhatsApp — 4 days
 

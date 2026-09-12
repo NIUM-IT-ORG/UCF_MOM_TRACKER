@@ -13,7 +13,7 @@
  * times, and then reported in terms of the thing the person has to do.
  */
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,10 +36,11 @@ function prismaCli() {
 const ATTEMPTS = 3;
 const PAUSE_MS = 2500;
 
-function run() {
+function run(env = process.env) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [prismaCli(), 'generate'], {
       cwd: root,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';
@@ -51,6 +52,38 @@ function run() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Generate the TypeScript client without downloading a native engine.
+ *
+ * `prisma generate` fetches its query and schema engines from
+ * binaries.prisma.sh on first run. Behind a proxy that does not allow that host
+ * it fails with a bare "403 Forbidden", and since this runs as `postinstall`
+ * the whole install fails with an error that mentions nothing you can act on.
+ *
+ * The generated client is TypeScript — the types and the query builder — and
+ * producing it needs no native engine at all; the engine is a *runtime*
+ * dependency, loaded when the API opens a connection. Pointing the two engine
+ * variables at an existing file is how Prisma is told "this one is already
+ * here, do not download it", which skips the fetch and emits the client.
+ *
+ * So: try the normal path first, because on a machine with open network it
+ * also places the runtime engine. Only if that fails on the download do we fall
+ * back to types-only, and say plainly what that does and does not give you.
+ */
+function typesOnlyEnv() {
+  const marker = join(root, 'node_modules', '.prisma-engine-placeholder');
+  writeFileSync(marker, 'placeholder - see scripts/prisma-generate.mjs\n');
+  return {
+    ...process.env,
+    PRISMA_SCHEMA_ENGINE_BINARY: marker,
+    PRISMA_QUERY_ENGINE_LIBRARY: marker,
+    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: '1',
+  };
+}
+
+const isDownloadFailure = (out) =>
+  /binaries\.prisma\.sh|Failed to fetch (the engine|sha256)/i.test(out);
 
 let last = { code: 1, out: '' };
 for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
@@ -69,6 +102,22 @@ for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
       `(${attempt} of ${ATTEMPTS - 1})...`,
   );
   await sleep(PAUSE_MS);
+}
+
+// The engine host is unreachable. Generate the client types anyway, so the
+// workspace compiles and the tests run; the API will say so when it tries to
+// open a connection, which is a far clearer place to find out.
+if (isDownloadFailure(last.out)) {
+  const typesOnly = await run(typesOnlyEnv());
+  if (typesOnly.code === 0) {
+    console.log(
+      '   Prisma client types generated. The native query engine could not be\n' +
+        '   downloaded (binaries.prisma.sh was unreachable), so the API cannot\n' +
+        '   open a database connection until it is. Building and testing work.',
+    );
+    process.exit(0);
+  }
+  last = typesOnly;
 }
 
 console.error(last.out.trim());

@@ -171,3 +171,23 @@
     }
   }
 }
+
+/* The minutes editor renders exactly the tags the server keeps, so what the
+   officer sees while typing is what the MoM will print. */
+.minutes-body h3 {
+  margin: 14px 0 5px;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.minutes-body p { margin: 0 0 9px; }
+.minutes-body ul,
+.minutes-body ol { margin: 0 0 9px; padding-left: 22px; }
+.minutes-body li { margin-bottom: 3px; }
+.minutes-body mark { background: #fdf0c8; padding: 0 2px; }
+.minutes-body a { color: var(--blue); }
+.minutes-body:empty::before {
+  content: 'Write what was discussed and decided. Use a sub-heading per agenda point.';
+  color: var(--muted);
+}

@@ -1,6 +1,20 @@
 'use client';
 
-import { PROJECT_STATUS_LABEL, type ProjectStatus } from '@mom/shared';
+import {
+  ACTION_STATUS_COLOR,
+  ACTION_STATUS_LABEL,
+  CLARIFICATION_STATUS_COLOR,
+  CLARIFICATION_STATUS_LABEL,
+  MEETING_STAGE_LABEL,
+  MOM_STATE_LABEL,
+  PROJECT_STATUS_LABEL,
+  type ActionStatus,
+  type ClarificationStatus,
+  type ItemType,
+  type MeetingStage,
+  type MomState,
+  type ProjectStatus,
+} from '@mom/shared';
 
 /**
  * The small pieces every screen reuses, lifted from the prototype.
@@ -187,4 +201,181 @@ export function Notice({
 /** A table that scrolls inside itself, so the page body never scrolls sideways. */
 export function TableWrap({ children }: { children: React.ReactNode }) {
   return <div className="overflow-x-auto">{children}</div>;
+}
+
+// ─────────────────────── meetings, MoM and items ───────────────────────
+
+const STAGE_STYLE: Record<string, string> = {
+  PLANNED: 'bg-[#EEF2F7] text-[#5A6B82]',
+  AGENDA: 'bg-[#EEF2F7] text-[#5A6B82]',
+  INVITEES: 'bg-[#EEF2F7] text-[#5A6B82]',
+  INVITEE_INPUTS: 'bg-[#FFF2E0] text-[#A66A12]',
+  CONFIRMED: 'bg-[#EAF1F9] text-[#2E5FA3]',
+  COMPOSED: 'bg-[#EEF2F7] text-[#5A6B82]',
+  LIVE: 'bg-[#FBEBE8] text-[#BF3B2B]',
+  HELD: 'bg-[#F3EAF8] text-[#7D3C98]',
+  MINUTED: 'bg-[#FFF2E0] text-[#A66A12]',
+  CLOSED: 'bg-[#E6F4EC] text-[#1B8A57]',
+  CANCELLED: 'bg-[#EEF2F7] text-[#8A94A3] line-through',
+};
+
+export function StageChip({ stage }: { stage: MeetingStage }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${
+        STAGE_STYLE[stage] ?? STAGE_STYLE.PLANNED
+      }`}
+    >
+      <i className="h-[7px] w-[7px] rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />
+      {MEETING_STAGE_LABEL[stage] ?? stage}
+    </span>
+  );
+}
+
+const MOM_STYLE: Record<string, string> = {
+  NOT_GENERATED: 'bg-[#EEF2F7] text-[#5A6B82]',
+  DRAFT: 'bg-[#EEF2F7] text-[#5A6B82]',
+  SUBMITTED: 'bg-[#FFF2E0] text-[#A66A12]',
+  RETURNED: 'bg-[#FBEBE8] text-[#BF3B2B]',
+  APPROVED: 'bg-[#EAF1F9] text-[#2E5FA3]',
+  SIGNED: 'bg-[#E6F4EC] text-[#1B8A57]',
+};
+
+export function MomChip({ state }: { state: MomState }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${
+        MOM_STYLE[state] ?? MOM_STYLE.DRAFT
+      }`}
+    >
+      <i className="h-[7px] w-[7px] rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />
+      {MOM_STATE_LABEL[state] ?? state}
+    </span>
+  );
+}
+
+/**
+ * The two item vocabularies, each with its own colour from `@mom/shared`.
+ *
+ * The colours are not chosen here. They come from the shared constants the two
+ * dashboard donuts also read, which is what stops a status being one colour on
+ * a chart and another in a table.
+ */
+export function ItemStatusChip({
+  type,
+  status,
+  isActive = true,
+}: {
+  type: ItemType;
+  status: ActionStatus | ClarificationStatus | null;
+  /**
+   * An item that has not been circulated shows as "Not yet active" whatever
+   * status it carries. Inertness is `activatedAt`, not a missing status — the
+   * database requires every item to have one from the moment it is created.
+   */
+  isActive?: boolean;
+}) {
+  if (!status || !isActive) {
+    return (
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#EEF2F7] px-2.5 py-1 text-[11px] font-bold text-[#8A94A3]">
+        Not yet active
+      </span>
+    );
+  }
+  const colour =
+    type === 'ACTION'
+      ? ACTION_STATUS_COLOR[status as ActionStatus]
+      : CLARIFICATION_STATUS_COLOR[status as ClarificationStatus];
+  const label =
+    type === 'ACTION'
+      ? ACTION_STATUS_LABEL[status as ActionStatus]
+      : CLARIFICATION_STATUS_LABEL[status as ClarificationStatus];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold"
+      style={{ color: colour, background: `${colour}1a` }}
+    >
+      <i className="h-[7px] w-[7px] rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * A field with its label, error and hint — the shape every form on this
+ * product uses, so that a required field looks required everywhere.
+ */
+export function Field({
+  label,
+  required,
+  error,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string | null;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[11.5px] font-bold text-navy">
+        {label}
+        {required ? <span className="text-danger"> *</span> : <span className="font-normal text-muted"> optional</span>}
+      </span>
+      {children}
+      {hint && !error && <span className="mt-1 block text-[11px] text-muted">{hint}</span>}
+      {error && (
+        <span role="alert" className="mt-1 block text-[11.5px] font-semibold text-danger">
+          {error}
+        </span>
+      )}
+    </label>
+  );
+}
+
+/** The numbered progress rail on the four-step scheduled wizard. */
+export function Steps({
+  steps,
+  current,
+  onGo,
+}: {
+  steps: string[];
+  current: number;
+  onGo?: (index: number) => void;
+}) {
+  return (
+    <ol className="mb-4 flex flex-wrap gap-1.5 p-0" aria-label="Progress">
+      {steps.map((label, i) => {
+        const state = i === current ? 'current' : i < current ? 'done' : 'todo';
+        return (
+          <li key={label} className="flex-1 list-none">
+            <button
+              type="button"
+              onClick={onGo && i <= current ? () => onGo(i) : undefined}
+              aria-current={state === 'current' ? 'step' : undefined}
+              disabled={!onGo || i > current}
+              className={`flex w-full items-center gap-2 rounded-[10px] border px-3 py-2 text-left text-[12px] font-semibold transition-colors ${
+                state === 'current'
+                  ? 'border-blue bg-blue text-white'
+                  : state === 'done'
+                    ? 'border-ice2 bg-ice text-navy hover:border-steel'
+                    : 'border-line bg-white text-muted'
+              }`}
+            >
+              <span
+                className={`grid h-5 w-5 flex-none place-items-center rounded-full text-[10px] font-extrabold ${
+                  state === 'current' ? 'bg-white/25' : state === 'done' ? 'bg-white text-blue' : 'bg-[#EEF2F7]'
+                }`}
+              >
+                {state === 'done' ? '✓' : i + 1}
+              </span>
+              <span className="truncate">{label}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }

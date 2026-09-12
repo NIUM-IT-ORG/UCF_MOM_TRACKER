@@ -56,6 +56,7 @@ export const updateItemDto = z
 export type UpdateItemDto = z.infer<typeof updateItemDto>;
 
 export const setOwnersDto = z.object({ ownerIds: z.array(cuid).min(1) }).strict();
+export type SetOwnersDto = z.infer<typeof setOwnersDto>;
 
 export const reportCompleteDto = z
   .object({
@@ -63,14 +64,17 @@ export const reportCompleteDto = z
     evidenceFileId: cuid.optional(),
   })
   .strict();
+export type ReportCompleteDto = z.infer<typeof reportCompleteDto>;
 
 export const sendBackDto = z
   .object({ reason: z.string().trim().min(3, 'say why it is going back') })
   .strict();
+export type SendBackDto = z.infer<typeof sendBackDto>;
 
 export const respondDto = z
   .object({ response: z.string().trim().min(3), respondedById: cuid.optional() })
   .strict();
+export type RespondDto = z.infer<typeof respondDto>;
 
 export const itemQueryDto = z.object({
   type: z.enum(['ACTION', 'CLARIFICATION']).optional(),

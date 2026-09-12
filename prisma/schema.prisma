@@ -294,7 +294,7 @@ model Meeting {
   agenda     AgendaItem[]
   invitees   MeetingInvitee[]
   minutes    Minutes?
-  mom        Mom?
+  moms       Mom[]
   items      Item[]
   documents  Document[]
 
@@ -393,9 +393,16 @@ model MinutesVersion {
   @@map("minutes_versions")
 }
 
+/// One row per version of the document, newest version wins.
+///
+/// `meetingId` is deliberately NOT unique. docs/05-WORKFLOWS.md 3 requires a
+/// circulated MoM to be immutable: a correction is a NEW row with
+/// `correctsMomId` pointing at the original, so the document people already
+/// read, filed and acted on stays exactly as it was. A unique meetingId would
+/// have forced the corrigendum to overwrite it.
 model Mom {
   id             String    @id @default(cuid())
-  meetingId      String    @unique @map("meeting_id")
+  meetingId      String    @map("meeting_id")
   state          MomState  @default(NOT_GENERATED)
   version        Int       @default(1)
   draftFileId    String?   @map("draft_file_id")
@@ -415,7 +422,11 @@ model Mom {
 
   meeting Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   history MomHistory[]
+  corrects Mom?       @relation("MomCorrects", fields: [correctsMomId], references: [id])
+  correctedBy Mom[]   @relation("MomCorrects")
 
+  @@unique([meetingId, version])
+  @@index([meetingId])
   @@index([state])
   @@map("moms")
 }

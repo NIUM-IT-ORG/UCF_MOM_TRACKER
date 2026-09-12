@@ -45,8 +45,14 @@ export function TopBar() {
   return (
     <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-3 border-b border-line bg-card px-[22px] py-[9px]">
       <nav aria-label="Breadcrumb" className="min-w-0 text-[12.5px] text-muted">
-        {section}
-        <Separator />
+        {/* "Meetings / Meetings / …" reads like a bug. When the group and the
+            item share a name, one of them is enough. */}
+        {section !== page && (
+          <>
+            {section}
+            <Separator />
+          </>
+        )}
         {tail ? (
           <>
             <Link href={href} className="text-muted hover:text-blue">

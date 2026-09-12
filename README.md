@@ -2,10 +2,11 @@
 
 **UCF Meeting & Action Item Tracker** — after every meeting, each commitment is written down with named officers and a date, and tracked until a senior officer agrees it is done.
 
-**Phases 0, 1 and 2 are complete.** Workspace, database, migration, seed, CI; sign-in with real
-authentication, capability-based access and project scoping; and the masters — projects with their
-financials, ULBs, officers, documents with a real file upload, and the people and designation
-lists with the effective-access checker. Meetings arrive in Phase 3.
+**Phases 0 to 4 are complete — the product does its job end to end.** Call a meeting (instantly, or
+as a four-step scheduled review with an agenda and items carried forward from last time), hold it,
+record attendance, write the minutes, raise actions and clarifications, then generate the MoM and
+take it through approval, signature and circulation. Circulating is what makes the commitments
+live. Notifications, the dashboard and the reports arrive in Phases 5 and 6.
 
 Sign in with any seeded officer at `<name>@example.gov`, password `ucf-demo-2026` (development
 only). The sign-in page lists them; picking one fills the form.
@@ -138,9 +139,9 @@ Do not invent answers. Build so they drop in.
 
 Each phase is one prompt. For the next one:
 
-> Read CLAUDE.md and docs/14-PHASE-2-REPORT.md, then implement Phase 3 of docs/08-BUILD-PLAN.md — tickets P3-01 through P3-10. Work one ticket at a time. Do not start Phase 4 while any Phase 3 test fails.
+> Read CLAUDE.md and docs/15-PHASE-3-4-REPORT.md, then implement Phase 5 of docs/08-BUILD-PLAN.md — tickets P5-01 through P5-12. Work one ticket at a time. Do not start Phase 6 while any Phase 5 test fails.
 
-`docs/14-PHASE-2-REPORT.md` records what Phase 2 enforces, the three defects found while building it, and what is carried forward. Read it before Phase 3. `docs/13-PHASE-1-REPORT.md` has the shape every guarded route follows.
+`docs/15-PHASE-3-4-REPORT.md` records what the meeting and MoM machines enforce, the three defects found while building them, and what Phase 5 inherits — the 27 events are already emitted, and draining them is the work. `docs/13-PHASE-1-REPORT.md` has the shape every guarded route follows.
 
 ---
 
