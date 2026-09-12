@@ -174,8 +174,22 @@ if defined LOCALDB (
 if errorlevel 1 goto :fail
 
 REM ---- 6 - dependencies ----------------------------------------------
+REM A running MoM_Tracker holds Prisma's query engine DLL open, and Windows
+REM will not let it be replaced. `prisma generate` then fails with EPERM
+REM during install, and the message says nothing about the real cause.
 echo.
 echo == Dependencies
+netstat -ano | findstr /r /c:"LISTENING" | findstr /r /c:":3000 " /c:":4000 " >nul 2>&1
+if not errorlevel 1 (
+  echo.
+  echo   STOPPED: MoM_Tracker looks like it is already running - something is
+  echo   listening on port 3000 or 4000.
+  echo.
+  echo   Close the RUN.bat window ^(press Ctrl+C in it^), then run SETUP.bat
+  echo   again. Windows will not let Prisma replace its engine file while the
+  echo   application has it open.
+  goto :fail
+)
 echo    First run downloads a few hundred packages. Give it a minute or two.
 call %PM% install
 if errorlevel 1 goto :fail

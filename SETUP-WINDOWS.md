@@ -178,6 +178,16 @@ That gets you a correct database. The API still needs the query engine to
 *run*, so the host has to be reachable before `pnpm dev` will work — but you
 can get everything else in place while that is sorted out.
 
+**"EPERM: operation not permitted, rename ... query_engine-windows.dll.node".**
+MoM_Tracker is still running. Windows will not let Prisma replace a DLL that a
+process has open, so `prisma generate` fails during install. Close the RUN.bat
+window (Ctrl+C in it) and run SETUP.bat again — setup now checks ports 3000 and
+4000 first and says so before it gets that far, and retries a couple of times in
+case it is only an antivirus scan holding the file for a moment.
+
+If it persists with nothing running, delete `node_modules\.prisma` and run
+SETUP.bat again; it is rebuilt from scratch.
+
 **`pnpm db:deploy` says the database does not exist.** The `CREATE DATABASE`
 step in part 1 did not run, or `DATABASE_URL` points somewhere else. Check the
 database name at the end of the URL.

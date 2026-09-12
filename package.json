@@ -32,7 +32,7 @@
     "check:scripts": "node scripts/check-scripts.mjs",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/prisma-generate.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
