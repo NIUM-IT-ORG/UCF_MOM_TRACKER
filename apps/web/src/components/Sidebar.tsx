@@ -60,7 +60,7 @@ export function Sidebar({ caps }: Props) {
       <div className="flex-none border-t border-white/10 px-4 py-[11px] text-[10px] leading-relaxed text-[#7E93B8]">
         Urban Challenge Fund
         <br />
-        <b className="text-[#A5BEE3]">Phase 1 · identity &amp; access</b>
+        <b className="text-[#A5BEE3]">Phase 2 · masters</b>
       </div>
     </aside>
   );
@@ -101,6 +101,10 @@ function NavLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
+      // A screen that is not built yet resolves to the same catch-all page for
+      // every route, so prefetching it buys nothing and costs a request per
+      // link on every page load.
+      prefetch={phase !== undefined ? false : undefined}
       className={`${base} ${
         active ? 'bg-blue text-white' : 'text-[#C5D4EA] hover:bg-white/10 hover:text-white'
       }`}

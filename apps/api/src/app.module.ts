@@ -7,6 +7,8 @@ import { HealthModule } from './modules/health/health.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { AccessModule } from './modules/access/access.module.js';
 import { MastersModule } from './modules/masters/masters.module.js';
+import { FilesModule } from './modules/files/files.module.js';
+import { ProjectsModule } from './modules/projects/projects.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor.js';
 import { AuditInterceptor } from './common/audit.interceptor.js';
@@ -24,6 +26,8 @@ import { AuditInterceptor } from './common/audit.interceptor.js';
     HealthModule,
     AccessModule,
     MastersModule,
+    FilesModule,
+    ProjectsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

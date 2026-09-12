@@ -517,18 +517,23 @@ model ItemUpdate {
 
 // ─────────────────────────── files & documents ───────────────────────────
 
+/// A file is reserved first and uploaded second, so size and digest are not
+/// known when the row is created. `uploadedAt` is what separates a finished
+/// file from a reservation nobody completed.
 model StoredFile {
-  id          String   @id @default(cuid())
-  objectKey   String   @unique @map("object_key")
-  fileName    String   @map("file_name")
-  mimeType    String   @map("mime_type")
-  sizeBytes   Int      @map("size_bytes")
-  sha256      String
-  uploadedById String  @map("uploaded_by_id")
-  createdAt   DateTime @default(now())
+  id          String    @id @default(cuid())
+  objectKey   String    @unique @map("object_key")
+  fileName    String    @map("file_name")
+  mimeType    String    @map("mime_type")
+  sizeBytes   Int?      @map("size_bytes")
+  sha256      String?
+  uploadedById String   @map("uploaded_by_id")
+  uploadedAt  DateTime? @map("uploaded_at")
+  createdAt   DateTime  @default(now())
 
   documents Document[]
 
+  @@index([uploadedAt])
   @@map("stored_files")
 }
 

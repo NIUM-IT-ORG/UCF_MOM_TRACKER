@@ -1,23 +1,27 @@
 'use client';
 
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
 import { useSession } from '@/lib/session';
+import { useCrumbTail } from '@/lib/crumb';
 
 /**
  * The breadcrumb is derived from the route rather than passed in, so it can
- * never sit there saying "Dashboard" on a page that is not the dashboard.
+ * never sit there saying "Dashboard" on a page that is not the dashboard. The
+ * one thing the route cannot give is a record's name, which the detail screen
+ * supplies through the crumb context once it has loaded it.
  */
-function useCrumb(): { section: string; page: string } {
+function useCrumb(): { section: string; page: string; href: string } {
   const pathname = usePathname();
-  if (pathname === '/') return { section: 'Overview', page: 'Dashboard' };
+  if (pathname === '/') return { section: 'Overview', page: 'Dashboard', href: '/' };
 
   const first = '/' + (pathname.split('/').filter(Boolean)[0] ?? '');
   for (const group of NAV) {
     const item = group.items.find((i) => i.href === first);
-    if (item) return { section: group.group, page: item.label };
+    if (item) return { section: group.group, page: item.label, href: first };
   }
-  return { section: 'UCF Tracker', page: 'Not found' };
+  return { section: 'UCF Tracker', page: 'Not found', href: first };
 }
 
 /** A stable colour per designation, so the same officer always looks the same. */
@@ -34,17 +38,26 @@ const BAND_COLOUR: Record<string, string> = {
 };
 
 export function TopBar() {
-  const { section, page } = useCrumb();
+  const { section, page, href } = useCrumb();
+  const tail = useCrumbTail();
   const { user, signOut } = useSession();
 
   return (
     <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-3 border-b border-line bg-card px-[22px] py-[9px]">
-      <nav aria-label="Breadcrumb" className="text-[12.5px] text-muted">
+      <nav aria-label="Breadcrumb" className="min-w-0 text-[12.5px] text-muted">
         {section}
-        <span aria-hidden="true" className="px-1.5 text-line">
-          /
-        </span>
-        <b className="text-ink">{page}</b>
+        <Separator />
+        {tail ? (
+          <>
+            <Link href={href} className="text-muted hover:text-blue">
+              {page}
+            </Link>
+            <Separator />
+            <b className="text-ink">{tail}</b>
+          </>
+        ) : (
+          <b className="text-ink">{page}</b>
+        )}
       </nav>
 
       <div className="ml-auto flex flex-wrap items-center gap-[9px]">
@@ -88,6 +101,14 @@ export function TopBar() {
         )}
       </div>
     </header>
+  );
+}
+
+function Separator() {
+  return (
+    <span aria-hidden="true" className="px-1.5 text-line">
+      /
+    </span>
   );
 }
 

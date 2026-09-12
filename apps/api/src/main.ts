@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
@@ -15,6 +16,13 @@ async function bootstrap(): Promise<void> {
   app.use(createHttpLogger(logger));
   app.use(helmet());
   app.use(cookieParser());
+
+  /*
+   * File uploads arrive as a raw body on one route. Everything else is JSON,
+   * and the JSON parser would reject a PDF - so the raw parser is registered
+   * for that path only, ahead of Nest's own body handling.
+   */
+  app.use('/api/v1/files', express.raw({ type: '*/*', limit: '25mb' }));
 
   // Tokens travel as httpOnly cookies, so the browser must be allowed to send
   // them and the origin list must be explicit — never a wildcard with credentials.

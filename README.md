@@ -2,9 +2,10 @@
 
 **UCF Meeting & Action Item Tracker** — after every meeting, each commitment is written down with named officers and a date, and tracked until a senior officer agrees it is done.
 
-**Phase 0 and Phase 1 are complete.** Workspace, database, migration, seed, CI — and sign-in with
-real authentication, capability-based access and project scoping. The screens themselves arrive
-from Phase 2 onwards.
+**Phases 0, 1 and 2 are complete.** Workspace, database, migration, seed, CI; sign-in with real
+authentication, capability-based access and project scoping; and the masters — projects with their
+financials, ULBs, officers, documents with a real file upload, and the people and designation
+lists with the effective-access checker. Meetings arrive in Phase 3.
 
 Sign in with any seeded officer at `<name>@example.gov`, password `ucf-demo-2026` (development
 only). The sign-in page lists them; picking one fills the form.
@@ -137,9 +138,9 @@ Do not invent answers. Build so they drop in.
 
 Each phase is one prompt. For the next one:
 
-> Read CLAUDE.md and docs/13-PHASE-1-REPORT.md, then implement Phase 2 of docs/08-BUILD-PLAN.md — tickets P2-01 through P2-06. Work one ticket at a time. Do not start Phase 3 while any Phase 2 test fails.
+> Read CLAUDE.md and docs/14-PHASE-2-REPORT.md, then implement Phase 3 of docs/08-BUILD-PLAN.md — tickets P3-01 through P3-10. Work one ticket at a time. Do not start Phase 4 while any Phase 3 test fails.
 
-`docs/13-PHASE-1-REPORT.md` records what Phase 1 enforces, the four defects found while building it, and the shape to follow. Read it before Phase 2.
+`docs/14-PHASE-2-REPORT.md` records what Phase 2 enforces, the three defects found while building it, and what is carried forward. Read it before Phase 3. `docs/13-PHASE-1-REPORT.md` has the shape every guarded route follows.
 
 ---
 

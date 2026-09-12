@@ -132,5 +132,9 @@ function summarise(
     : projectCount === 0
       ? 'no projects at all, so every list will be empty'
       : `${projectCount} project${projectCount === 1 ? '' : 's'}`;
-  return `${name} is a ${designation} with ${capCount} capabilit${capCount === 1 ? 'y' : 'ies'}, on ${scope}.`;
+  // "holds the X designation" rather than "is a X": two designations in the
+  // master data are acronyms whose expansion the source documents never gave
+  // (CDMA, PDMC), and "is a PDMC" reads badly where "is a Mission Director"
+  // does not. This phrasing is correct for both.
+  return `${name} holds the ${designation} designation, with ${capCount} capabilit${capCount === 1 ? 'y' : 'ies'}, on ${scope}.`;
 }

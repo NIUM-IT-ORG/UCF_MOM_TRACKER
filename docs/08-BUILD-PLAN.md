@@ -44,16 +44,19 @@ what was verified and the three decisions taken along the way.
 
 ## Phase 2 · Masters — 2 days
 
-| # | Ticket | Done when |
-|---|---|---|
-| P2-01 | Projects CRUD with financial fields as `Decimal(14,2)` | no float anywhere near money |
-| P2-02 | ULBs under a project, single-lead constraint | a second lead is rejected |
-| P2-03 | Files module: presigned upload, sha256, MinIO in dev | a 20 MB PDF round-trips |
-| P2-04 | Documents with **mandatory name, type and file**, scoped to project / meeting / item | a request missing any of the three returns `VALIDATION_FAILED` |
-| P2-05 | Web: project master list and the four tabs — Project info, Officers, ULB info, Documents | matches the prototype |
-| P2-06 | Web: people and masters, designation and department editors with retire-not-delete | |
+**Status: DONE.** See `docs/14-PHASE-2-REPORT.md`.
 
-**Demo:** create a project, add two ULBs, upload a sanction order, fail to upload one without a name.
+| # | Ticket | Done when | |
+|---|---|---|---|
+| P2-00 | **Added:** a reserved file has no size and no digest until its bytes arrive | migration `20260913000000_files` applies | ✅ |
+| P2-01 | Projects CRUD with financial fields as `Decimal(14,2)` | no float anywhere near money — including on the wire, where money is a string | ✅ |
+| P2-02 | ULBs under a project, single-lead constraint | a second lead is rejected, in words rather than as a constraint name | ✅ |
+| P2-03 | Files module: two-step upload, sha256, local disk in dev | a PDF round-trips; the driver is swappable for S3 without touching a caller | ✅ |
+| P2-04 | Documents with **mandatory name, type and file**, scoped to project / meeting / item | a request missing any of the three returns `VALIDATION_FAILED` | ✅ |
+| P2-05 | Web: project master list and the four tabs — Project info, Officers, ULB info, Documents | matches the prototype; tab state in the URL | ✅ |
+| P2-06 | Web: people and masters, designation and department editors with retire-not-delete | the lists and the effective-access checker ship here; retire-not-delete exists on the API, not yet as a screen | ◑ |
+
+**Demo:** create a project, add two ULBs, upload a sanction order, fail to upload one without a name. — walked in a browser; see `docs/14-PHASE-2-REPORT.md` §3.
 
 ## Phase 3 · Meetings — 5 days
 

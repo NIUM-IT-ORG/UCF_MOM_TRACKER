@@ -73,20 +73,6 @@ export const ROADMAP: Record<string, Planned> = {
     blurb:
       'Six reports — action taken, meeting register, pending approvals, officer performance, clarification log, project status — in JSON, CSV and PDF, and subscribable.',
   },
-  '/projects': {
-    phase: 2,
-    tickets: ['P2-01', 'P2-05'],
-    title: 'Projects',
-    blurb:
-      'The project master and its four tabs: project info, officers, ULB info and documents. A document cannot be uploaded without a name and a type.',
-  },
-  '/people': {
-    phase: 2,
-    tickets: ['P2-06'],
-    title: 'People & designations',
-    blurb:
-      'Users, designations and departments, with project mapping. People are retired, never deleted, because they are named in minutes that must stay readable.',
-  },
   '/access': {
     phase: 1,
     tickets: ['P1-06', 'P1-07'],
