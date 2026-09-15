@@ -468,11 +468,11 @@ model Item {
   dueDate      DateTime?     @map("due_date") @db.Date
   originalDue  DateTime?     @map("original_due") @db.Date
   priority     Priority?
-  actionStatus ActionStatus?
+  actionStatus ActionStatus? @map("action_status")
 
   // clarification-only
   respondedById       String?              @map("responded_by_id")
-  clarificationStatus ClarificationStatus?
+  clarificationStatus ClarificationStatus? @map("clarification_status")
 
   /// Inert until the signed MoM is circulated. See docs/05-WORKFLOWS.md.
   activatedAt DateTime? @map("activated_at")

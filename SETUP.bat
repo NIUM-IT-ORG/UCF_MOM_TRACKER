@@ -246,6 +246,8 @@ if errorlevel 1 (
 )
 call %PM% db:seed
 if errorlevel 1 goto :fail
+call %PM% assert:schema
+if errorlevel 1 goto :fail
 call %PM% assert:invariants
 if errorlevel 1 goto :fail
 call %PM% assert:seed

@@ -90,6 +90,13 @@ jobs:
       - name: Seed the prototype dataset
         run: pnpm db:seed
 
+      # Every Prisma field must name a column that exists. TypeScript cannot
+      # see a missing @map - the field name is valid either way - so only a
+      # comparison against a real database catches it, and it has to run
+      # before anything that would hit that column at runtime.
+      - name: Assert the schema matches the database
+        run: pnpm assert:schema
+
       # Append-only audit, and the action/clarification column split. These are
       # database guarantees, so they are checked against a database.
       - name: Assert the database invariants

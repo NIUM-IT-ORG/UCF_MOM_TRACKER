@@ -108,6 +108,7 @@ pnpm db:seed              # reload the prototype dataset
 pnpm db:reset             # drop, migrate, seed
 pnpm db:studio            # browse the data
 
+pnpm assert:schema        # every Prisma field must name a column that exists
 pnpm assert:invariants     # append-only audit + the items shape constraint
 pnpm assert:seed          # the seeded figures must equal the prototype's
 ```
