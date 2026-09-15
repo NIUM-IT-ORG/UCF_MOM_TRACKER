@@ -31,6 +31,7 @@
     "assert:schema": "node scripts/assert-schema.mjs",
     "assert:seed": "tsx scripts/assert-seed.ts",
     "check:scripts": "node scripts/check-scripts.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "postinstall": "node scripts/prisma-generate.mjs"

@@ -263,6 +263,9 @@ echo.
 echo    Start it with:  RUN.bat
 echo    Web             http://localhost:3000
 echo    API             http://localhost:4000/api/v1/health
+echo.
+echo    If anything fails while using it, run DOCTOR.bat and send on
+echo    what it prints. It names the cause instead of guessing.
 echo   ================================================================
 echo.
 set /p "STARTNOW=  Start it now? (Y/n): "

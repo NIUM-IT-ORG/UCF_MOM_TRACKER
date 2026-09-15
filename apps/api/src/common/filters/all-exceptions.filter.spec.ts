@@ -146,3 +146,59 @@ describe('the documented codes keep their documented statuses', () => {
     expect(run(new HttpException('Too big', 413)).status).toBe(413);
   });
 });
+
+describe('a validation failure from the shared package is still a validation failure', () => {
+  /**
+   * `packages/shared` is ESM and `apps/api` compiles to CommonJS, so the two
+   * halves load different builds of zod. A DTO error raised by a shared schema
+   * is therefore NOT an instance of the ZodError class this file can see. It
+   * used to fall through to a bare 500, and an officer who left a field blank
+   * was told "Something went wrong on our side."
+   *
+   * This fake is that foreign error: the right shape, the wrong class.
+   */
+  class ForeignZodError extends Error {
+    override name = 'ZodError';
+    constructor(readonly issues: { path: (string | number)[]; message: string }[]) {
+      // zod's own message is a pretty-printed JSON array, whose last line is "]".
+      super(JSON.stringify(issues, null, 2));
+    }
+  }
+
+  const foreign = new ForeignZodError([
+    { path: ['name'], message: 'give the document a name' },
+    { path: ['fileId'], message: 'Invalid cuid' },
+  ]);
+
+  it('is a 400, not a 500', () => {
+    expect(run(foreign).status).toBe(400);
+    expect(run(foreign).error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('is not an instance of this half of the module graph — which is the point', () => {
+    expect(foreign instanceof ZodError).toBe(false);
+  });
+
+  it('names every field that failed, in the message and not only in the details', () => {
+    const { error } = run(foreign);
+    expect(error.message).toContain('name: give the document a name');
+    expect(error.message).toContain('fileId: Invalid cuid');
+    expect(error.details).toEqual([
+      { path: 'name', message: 'give the document a name' },
+      { path: 'fileId', message: 'Invalid cuid' },
+    ]);
+  });
+
+  it('never shows "]" as the fault — that is what was on screen', () => {
+    const local = new ZodError(z.object({ name: z.string() }).safeParse({}).error?.issues ?? []);
+    for (const e of [foreign, local]) {
+      const { error } = run(e);
+      expect(error.fault ?? '').not.toBe(']');
+      expect(error.message.trim()).not.toBe(']');
+    }
+  });
+
+  it('a body with no issues at all is still not a 500', () => {
+    expect(run(new ForeignZodError([])).status).toBe(400);
+  });
+});

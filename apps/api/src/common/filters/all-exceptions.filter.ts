@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
-import { ZodError } from 'zod';
+import type { ZodError, ZodIssue } from 'zod';
 import { ERROR_STATUS, type ApiError, type ErrorCode } from '@mom/shared';
 import { AppError } from '../app-error.js';
 
@@ -72,16 +72,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (translated) return translated;
     }
 
-    if (exception instanceof ZodError) {
+    const zod = asZodError(exception);
+    if (zod) {
+      const fields = zod.issues.map((i: ZodIssue) => ({
+        path: i.path.join('.') || '(body)',
+        message: i.message,
+      }));
       return {
         status: 400,
         error: {
           code: 'VALIDATION_FAILED',
-          message: 'The request body did not validate.',
-          details: exception.issues.map((i) => ({
-            path: i.path.join('.'),
-            message: i.message,
-          })),
+          // The message names the fields. A validation error that does not say
+          // which field is no better than no message at all — and `details` is
+          // not always where somebody looks first.
+          message: `${fields.map((f) => `${f.path}: ${f.message}`).join('; ')}`,
+          details: fields,
         },
       };
     }
@@ -184,6 +189,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
 function describe(exception: unknown): string {
   if (!(exception instanceof Error)) return String(exception);
 
+  // A zod error's message is a pretty-printed JSON array, so the last line of
+  // it is "]" — which is what an officer was actually shown once.
+  const zod = asZodError(exception);
+  if (zod) {
+    return `ZodError: ${zod.issues
+      .map((i) => `${i.path.join('.') || '(body)'}: ${i.message}`)
+      .join('; ')}`.slice(0, 500);
+  }
+
   const prisma = exception as Error & { code?: string; meta?: Record<string, unknown> };
   const code = typeof prisma.code === 'string' ? `${prisma.code}: ` : '';
   const target =
@@ -202,4 +216,29 @@ function describe(exception: unknown): string {
     .filter((l) => !/^Invalid `.*` invocation/.test(l) && !/^[→|]/.test(l) && !/^\d+\s/.test(l));
   const said = lines[lines.length - 1] ?? exception.message.trim();
   return `${exception.name}: ${code}${said}${target}`.slice(0, 500);
+}
+
+/**
+ * A zod error, recognised by its shape rather than by `instanceof`.
+ *
+ * `instanceof ZodError` looked right and was wrong. `packages/shared` is ESM
+ * and `apps/api` compiles to CommonJS, so each half loads a different build of
+ * zod — the same version, from the same folder, but two module instances and
+ * therefore two unrelated `ZodError` classes. Every DTO failure raised by a
+ * shared schema failed that check and fell through to a bare 500, so an officer
+ * who left a field blank was told "Something went wrong on our side."
+ *
+ * This is the dual-package hazard, and structural detection is the fix that
+ * holds whatever the module graph does next.
+ */
+function asZodError(e: unknown): ZodError | null {
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    (e as { name?: unknown }).name === 'ZodError' &&
+    Array.isArray((e as { issues?: unknown }).issues)
+  ) {
+    return e as ZodError;
+  }
+  return null;
 }

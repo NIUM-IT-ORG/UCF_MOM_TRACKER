@@ -45,6 +45,7 @@ installing PostgreSQL natively.
 ```
 MoM_Tracker/
 ├─ SETUP.bat · RUN.bat     double-click setup, then double-click run
+├─ DOCTOR.bat              double-click when something fails - prints the cause
 ├─ CLAUDE.md               the build contract — read it first
 ├─ SETUP-WINDOWS.md        local setup without Docker
 ├─ docs/                   the specification, 00 to 12
@@ -111,7 +112,15 @@ pnpm db:studio            # browse the data
 pnpm assert:schema        # every Prisma field must name a column that exists
 pnpm assert:invariants     # append-only audit + the items shape constraint
 pnpm assert:seed          # the seeded figures must equal the prototype's
+
+pnpm doctor               # what is actually wrong, in one command
 ```
+
+**When something fails on a machine, run `pnpm doctor` (or double-click
+`DOCTOR.bat`) before anything else.** It checks the migrations, the schema
+against the real columns, the generated client, and then signs in and performs
+the writes that have given trouble — reporting the real cause of each instead
+of the sentence the browser shows. It puts back everything it touches.
 
 ---
 

@@ -23,70 +23,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { compare, parseSchema, readColumns } from './lib/schema-check.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const require = createRequire(join(root, 'package.json'));
 const { Client } = require('pg');
-
-/** Scalar Prisma types. Anything else is a relation or an enum. */
-const SCALARS = new Set([
-  'String',
-  'Boolean',
-  'Int',
-  'BigInt',
-  'Float',
-  'Decimal',
-  'DateTime',
-  'Json',
-  'Bytes',
-]);
-
-function parseSchema(text) {
-  const models = [];
-  const enums = new Set();
-
-  for (const m of text.matchAll(/^enum\s+(\w+)\s*\{/gm)) enums.add(m[1]);
-
-  const modelRe = /^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm;
-  for (const match of text.matchAll(modelRe)) {
-    const [, name, body] = match;
-    const lines = body
-      .split('\n')
-      .map((l) => l.replace(/\/\/.*$/, '').trim())
-      .filter(Boolean);
-
-    let table = null;
-    const fields = [];
-
-    for (const line of lines) {
-      if (line.startsWith('///')) continue;
-      if (line.startsWith('@@')) {
-        const t = /@@map\("([^"]+)"\)/.exec(line);
-        if (t) table = t[1];
-        continue;
-      }
-      const field = /^(\w+)\s+(\w+)(\[\])?(\?)?/.exec(line);
-      if (!field) continue;
-
-      const [, fieldName, fieldType, list] = field;
-      // A list is always a relation; a relation attribute says so outright.
-      if (list || line.includes('@relation')) continue;
-
-      const mapped = /@map\("([^"]+)"\)/.exec(line);
-      fields.push({
-        field: fieldName,
-        type: fieldType,
-        column: mapped ? mapped[1] : fieldName,
-        mapped: Boolean(mapped),
-        scalarOrEnum: SCALARS.has(fieldType) || enums.has(fieldType),
-      });
-    }
-
-    models.push({ name, table: table ?? name, fields: fields.filter((f) => f.scalarOrEnum) });
-  }
-
-  return models;
-}
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -95,46 +36,14 @@ async function main() {
     process.exit(1);
   }
 
-  const schema = readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8');
-  const models = parseSchema(schema);
+  const models = parseSchema(readFileSync(join(root, 'prisma', 'schema.prisma'), 'utf8'));
 
   const client = new Client({ connectionString: url.replace(/\?.*$/, '') });
   await client.connect();
-
-  const { rows } = await client.query(
-    `select table_name, column_name from information_schema.columns
-     where table_schema = current_schema()`,
-  );
+  const byTable = await readColumns(client);
   await client.end();
 
-  const byTable = new Map();
-  for (const r of rows) {
-    if (!byTable.has(r.table_name)) byTable.set(r.table_name, new Set());
-    byTable.get(r.table_name).add(r.column_name);
-  }
-
-  const problems = [];
-  let checked = 0;
-
-  for (const model of models) {
-    const columns = byTable.get(model.table);
-    if (!columns) {
-      problems.push(`model ${model.name}: no table "${model.table}" in the database`);
-      continue;
-    }
-    for (const f of model.fields) {
-      checked += 1;
-      if (columns.has(f.column)) continue;
-
-      // The likeliest cause by far: a missing @map on a camelCase field whose
-      // column is snake_case. Say so, with the line to add.
-      const snake = f.field.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-      const hint = columns.has(snake)
-        ? `the column is "${snake}" — add @map("${snake}")`
-        : `no column "${f.column}" and no obvious match`;
-      problems.push(`${model.name}.${f.field} → ${model.table}."${f.column}": ${hint}`);
-    }
-  }
+  const { checked, problems } = compare(models, byTable);
 
   if (problems.length > 0) {
     console.error(`\nSchema and database disagree on ${problems.length} field(s):\n`);

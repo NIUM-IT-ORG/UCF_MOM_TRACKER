@@ -158,9 +158,31 @@ pnpm db:migrate          # create a new migration after editing schema.prisma
 pnpm db:reset            # drop, re-migrate, re-seed
 pnpm db:studio           # browse the data
 pnpm assert:invariants   # re-check the two database guarantees
+pnpm assert:schema       # every Prisma field must name a column that exists
+
+pnpm doctor              # what is actually wrong, in one command
 ```
 
 ## When something does not work
+
+**Start with `DOCTOR.bat`.** Leave `RUN.bat` running in its own window,
+double-click `DOCTOR.bat`, and send on whatever it prints. It checks, in the
+order these things actually go wrong:
+
+1. every migration on disk against the ones the database has recorded;
+2. every Prisma field against every real column (the P2022 class of failure);
+3. the generated Prisma client against the schema it was generated from;
+4. the API itself — it signs in as a seeded officer and performs the three
+   writes that have given trouble, reporting the real cause of each.
+
+It leaves nothing behind: what is already recorded it re-saves unchanged, and
+anything it adds in order to try a write it removes again. Only the audit trail
+keeps a record, because that is append-only by design.
+
+**A save fails, but everything reads fine.** Almost always the database is
+older than the code: a migration on disk was never applied, so the column the
+code writes does not exist yet. `pnpm doctor` names the missing migrations;
+`pnpm db:apply` applies them.
 
 **"Execution of PostgreSQL by a user with administrative permissions is not
 permitted."** The window is running as Administrator. PostgreSQL refuses to
