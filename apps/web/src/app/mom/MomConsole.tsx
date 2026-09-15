@@ -177,9 +177,11 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               </>
             )}
             {mom.state === 'SUBMITTED' && !canApprove && (
-              <span className="text-[12px] text-muted">
-                With the approver. Approving needs the <b>Approve the MoM</b> capability.
-              </span>
+              <WaitingOn
+                capability="approve_mom"
+                lead="With the approver."
+                who="Approving it is their step"
+              />
             )}
             {mom.state === 'APPROVED' && canSign && (
               <button className="btn-primary" type="button" onClick={() => setAsking('sign')}>
@@ -187,15 +189,18 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               </button>
             )}
             {mom.state === 'APPROVED' && !canSign && (
-              <span className="text-[12px] text-muted">
-                Approved. It goes live once the coordinator uploads the signed copy — that needs
-                the <b>Upload the signed MoM</b> capability, which your designation does not carry.
-              </span>
+              <WaitingOn
+                capability="upload_signed"
+                lead="Approved. It goes live when the signed copy is uploaded and it is circulated."
+                who="That is the coordinator's step"
+              />
             )}
             {mom.state === 'DRAFT' && !canMinute && (
-              <span className="text-[12px] text-muted">
-                A draft. Submitting it for approval needs the <b>Record minutes</b> capability.
-              </span>
+              <WaitingOn
+                capability="record_minutes"
+                lead="A draft, not yet with the approver."
+                who="Submitting it is the coordinator's step"
+              />
             )}
             {mom.state === 'SIGNED' && canMinute && (
               <button
@@ -301,5 +306,59 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
         )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * Says who can take the next step, by name.
+ *
+ * "You do not have that capability" leaves an officer with nothing to do but
+ * ask around. Both halves of a hand-off matter: that it is not yours, and
+ * whose it is. The names come from the designation matrix, so they stay right
+ * when the matrix changes, and the list is already scoped to officers this
+ * viewer is allowed to see.
+ */
+function WaitingOn({
+  capability,
+  lead,
+  who,
+}: {
+  capability: string;
+  lead: string;
+  who: string;
+}) {
+  const [names, setNames] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      api<{ code: string; caps: string[] }[]>('/designations'),
+      api<{ name: string; accountState: string; designation: { code: string } }[]>('/users'),
+    ])
+      .then(([designations, users]) => {
+        const holders = new Set(
+          designations.filter((d) => d.caps.includes(capability)).map((d) => d.code),
+        );
+        const found = users
+          .filter((u) => u.accountState === 'ACTIVE' && holders.has(u.designation.code))
+          .map((u) => `${u.name} (${u.designation.code})`);
+        if (alive) setNames(found);
+      })
+      // Not being able to name them does not make the sentence wrong.
+      .catch(() => alive && setNames([]));
+    return () => {
+      alive = false;
+    };
+  }, [capability]);
+
+  return (
+    <span className="text-[12px] text-muted">
+      {lead} {who}
+      {names === null
+        ? '.'
+        : names.length === 0
+          ? '.'
+          : `: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ', and others' : ''}.`}
+    </span>
   );
 }
