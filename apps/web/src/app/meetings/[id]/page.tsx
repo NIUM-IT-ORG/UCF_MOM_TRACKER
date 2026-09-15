@@ -37,6 +37,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import { MeetingActions } from './MeetingActions';
+import { GenerateMom } from './GenerateMom';
 import { DocumentUpload } from '@/components/DocumentUpload';
 
 const TABS = ['agenda', 'attendance', 'items', 'documents', 'mom'] as const;
@@ -193,7 +194,14 @@ export default function MeetingPage() {
           onUploaded={() => void load()}
         />
       )}
-      {tab === 'mom' && <MomTab meeting={meeting} mom={mom} />}
+      {tab === 'mom' && (
+        <MomTab
+          meeting={meeting}
+          mom={mom}
+          canGenerate={caps.includes('record_minutes')}
+          onGenerated={() => void load()}
+        />
+      )}
     </>
   );
 }
@@ -642,15 +650,27 @@ function DocumentsTab({
   );
 }
 
-function MomTab({ meeting, mom }: { meeting: MeetingDetail; mom: MomRow | null }) {
-  if (!mom) {
+function MomTab({
+  meeting,
+  mom,
+  canGenerate,
+  onGenerated,
+}: {
+  meeting: MeetingDetail;
+  mom: MomRow | null;
+  canGenerate: boolean;
+  onGenerated: () => void;
+}) {
+  // "No MoM yet" is a step, not a dead end. Whoever is looking at this tab is
+  // trying to produce one, so the button to do it belongs here — with the two
+  // things it needs stated plainly, because the server refuses without them.
+  if (!mom || mom.state === 'NOT_GENERATED') {
     return (
-      <Card>
-        <Empty>
-          No MoM has been generated yet. Record the minutes first, in the{' '}
-          <Link href={`/meetings/${meeting.id}/minutes`}>minutes editor</Link>.
-        </Empty>
-      </Card>
+      <GenerateMom
+        meeting={meeting}
+        canGenerate={canGenerate}
+        onGenerated={onGenerated}
+      />
     );
   }
 

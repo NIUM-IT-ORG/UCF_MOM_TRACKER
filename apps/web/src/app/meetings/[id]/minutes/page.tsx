@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useSetCrumbTail } from '@/lib/crumb';
@@ -21,6 +21,7 @@ import { ItemForm } from './ItemForm';
  */
 export default function MinutesPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { caps } = useSession();
 
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
@@ -29,6 +30,7 @@ export default function MinutesPage() {
   const [body, setBody] = useState('');
   const [locked, setLocked] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
@@ -88,6 +90,39 @@ export default function MinutesPage() {
       if (err instanceof ApiError && err.code === 'MINUTES_LOCKED') setLocked(true);
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Generating the MoM is the next step after saving, and it was reachable
+  // from nowhere in the interface — the endpoint existed, every screen said to
+  // do it, and no screen offered it.
+  const unmarked = (meeting?.invitees ?? []).filter((i) => !i.attendance).map((i) => i.user.name);
+  const ready =
+    Boolean(meeting) &&
+    ['HELD', 'MINUTED', 'CLOSED'].includes(meeting?.stage ?? '') &&
+    unmarked.length === 0 &&
+    body.trim().length > 0;
+  const blocking = !meeting
+    ? ''
+    : !['HELD', 'MINUTED', 'CLOSED'].includes(meeting.stage)
+      ? 'The meeting has to be held first.'
+      : unmarked.length > 0
+        ? `Attendance is still unmarked for ${unmarked.join(', ')}.`
+        : body.trim().length === 0
+          ? 'Write the minutes first.'
+          : 'Save the minutes first.';
+
+  async function generate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      await api(`/meetings/${id}/mom/generate`, { method: 'POST' });
+      await load();
+      router.push(`/mom?meeting=${id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.display : 'Could not generate the MoM.');
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -237,13 +272,27 @@ export default function MinutesPage() {
                   nobody has been told.
                 </li>
               </ol>
-              {mom && mom.state !== 'NOT_GENERATED' && (
-                <div className="mt-3">
+              <div className="mt-3">
+                {mom && mom.state !== 'NOT_GENERATED' ? (
                   <Link className="btn-ghost" href={`/mom?meeting=${meeting.id}`}>
                     Go to the MoM console
                   </Link>
-                </div>
-              )}
+                ) : (
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    disabled={!caps.includes('record_minutes') || generating || !ready}
+                    onClick={() => void generate()}
+                  >
+                    {generating ? 'Generating…' : 'Generate the draft MoM'}
+                  </button>
+                )}
+                {!ready && (!mom || mom.state === 'NOT_GENERATED') && (
+                  <p className="mb-0 mt-2 text-[11.5px] text-muted">
+                    {blocking}
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
         </div>
