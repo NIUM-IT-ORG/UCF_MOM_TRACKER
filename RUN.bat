@@ -21,6 +21,26 @@ if not exist "node_modules" (
   exit /b 1
 )
 
+REM The project-local PostgreSQL will not start under an administrator
+REM account - PostgreSQL refuses, on purpose. Same check as SETUP.bat, and
+REM only when there is no installed PostgreSQL for us to use instead.
+if exist "var\pgdata" (
+  set "ELEVATED="
+  whoami /groups 2>nul | findstr /c:"S-1-16-12288" >nul 2>&1 && set "ELEVATED=1"
+  if defined ELEVATED (
+    echo.
+    echo   STOPPED: this window is running as Administrator.
+    echo.
+    echo   The project-local PostgreSQL refuses to start as an administrator,
+    echo   and nothing here needs those rights.
+    echo.
+    echo   Close this window and start RUN.bat with an ordinary double-click.
+    echo.
+    pause
+    exit /b 1
+  )
+)
+
 REM PostgreSQL's bin folder is not on PATH by default. The app does not need
 REM psql, but the pnpm db:* scripts do, so make it available anyway.
 where psql >nul 2>&1

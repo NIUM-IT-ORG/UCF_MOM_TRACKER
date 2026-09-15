@@ -162,6 +162,20 @@ pnpm assert:invariants   # re-check the two database guarantees
 
 ## When something does not work
 
+**"Execution of PostgreSQL by a user with administrative permissions is not
+permitted."** The window is running as Administrator. PostgreSQL refuses to
+start under an elevated account on purpose — a database server with
+administrator rights is a security risk — and it says so several screens after
+the point where the mistake was made.
+
+Nothing in this setup needs administrator rights. Close the window and start
+`SETUP.bat` (or `RUN.bat`) with an ordinary double-click, **not** with "Run as
+administrator". Both scripts now stop with this explanation before they get that
+far.
+
+The one thing that *did* need elevation was Corepack, and that path was removed
+— pnpm is resolved through `npx` instead, which needs no rights at all.
+
 **`prisma generate` fails on install, or `pnpm db:deploy` cannot start.**
 Prisma downloads its engine binaries from `binaries.prisma.sh`, and some
 corporate networks block that host. If you are behind a proxy, set `HTTPS_PROXY`

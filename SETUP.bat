@@ -122,6 +122,32 @@ if defined PSQL (
   echo    no administrator rights. Deleting the var folder undoes all of it.
 )
 
+REM PostgreSQL refuses to start under an elevated account, by design - a
+REM server running as an administrator is a security risk, so it stops with
+REM "Execution of PostgreSQL by a user with administrative permissions is not
+REM permitted". That message arrives several screens after the actual mistake,
+REM which was opening this window as Administrator. Catch it here instead.
+REM An INSTALLED PostgreSQL is a Windows service under its own account, so
+REM elevation does not matter on that path - only on this one.
+if defined LOCALDB (
+  set "ELEVATED="
+  whoami /groups 2>nul | findstr /c:"S-1-16-12288" >nul 2>&1 && set "ELEVATED=1"
+  if defined ELEVATED (
+    echo.
+    echo   STOPPED: this window is running as Administrator.
+    echo.
+    echo   The project-local PostgreSQL will not start under an administrator
+    echo   account - PostgreSQL itself refuses, on purpose, because a database
+    echo   server with administrator rights is a security risk.
+    echo.
+    echo   Nothing in this setup needs administrator rights anyway.
+    echo.
+    echo   Close this window, then start SETUP.bat with an ordinary
+    echo   double-click. Do NOT use "Run as administrator".
+    goto :fail
+  )
+)
+
 REM ---- 4 - database and role -----------------------------------------
 if defined LOCALDB goto :skipsysdb
 
