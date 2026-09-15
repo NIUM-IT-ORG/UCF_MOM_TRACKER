@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
+import { describeOwnWork, ownWork } from '../scripts/lib/db-in-use.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const data = JSON.parse(readFileSync(join(here, 'seed-data.json'), 'utf8')) as Fixture;
@@ -239,6 +240,27 @@ async function main(): Promise<void> {
 
   const db = new Client({ connectionString: url });
   await db.connect();
+
+  /*
+   * Refuse to reset a database somebody is using.
+   *
+   * This is a TRUNCATE of every table. On a fresh checkout that is the point;
+   * on a machine with a month of real minutes in it, it is the worst thing
+   * this repository could do — and `SETUP.bat` calls it, so "run setup again"
+   * has to be safe advice. Anything without a `seed_` id was entered by a
+   * person, and that is enough to stop.
+   */
+  const theirs = await ownWork(db);
+  if (theirs.length > 0 && !process.env.SEED_FORCE) {
+    console.log(
+      `\n  This database holds work that was entered here — ${describeOwnWork(theirs)}.\n` +
+        '  Seeding would TRUNCATE every table, so nothing was changed.\n\n' +
+        '  To load the demo dataset anyway, and lose all of it:\n' +
+        '    SEED_FORCE=1 pnpm db:seed          (PowerShell: $env:SEED_FORCE=1)\n',
+    );
+    await db.end();
+    return;
+  }
 
   try {
     await db.query('BEGIN');

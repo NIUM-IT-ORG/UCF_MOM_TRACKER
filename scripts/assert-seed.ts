@@ -10,6 +10,7 @@
  */
 import 'dotenv/config';
 import { Client } from 'pg';
+import { describeOwnWork, ownWork } from './lib/db-in-use.js';
 import { SEED_DESIGNATION_CAPS } from '@mom/shared';
 
 interface Check {
@@ -133,6 +134,19 @@ async function main(): Promise<void> {
 
   const db = new Client({ connectionString: url });
   await db.connect();
+
+  // Once somebody has used this database, its figures are theirs and no longer
+  // the prototype's. Checking them then would fail an honest, correct machine.
+  const theirs = await ownWork(db);
+  if (theirs.length > 0) {
+    console.log(
+      `\nThis database is in use — ${describeOwnWork(theirs)} were entered here.\n` +
+        'The prototype comparison only applies to a freshly seeded database, so\n' +
+        'there is nothing to check. Not a failure.\n',
+    );
+    await db.end();
+    return;
+  }
 
   let failures = 0;
   try {

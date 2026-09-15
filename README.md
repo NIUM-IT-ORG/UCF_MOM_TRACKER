@@ -105,7 +105,7 @@ pnpm db:deploy            # apply existing migrations
 pnpm db:apply             # same, without Prisma's engine (blocked-CDN fallback)
 pnpm db:local             # run the project-local database on its own
 pnpm db:migrate           # create a migration after editing schema.prisma
-pnpm db:seed              # reload the prototype dataset
+pnpm db:seed              # reload the prototype dataset (refuses on a database in use)
 pnpm db:reset             # drop, migrate, seed
 pnpm db:studio            # browse the data
 
@@ -115,6 +115,10 @@ pnpm assert:seed          # the seeded figures must equal the prototype's
 
 pnpm doctor               # what is actually wrong, in one command
 ```
+
+Running setup again is safe: **the seed refuses to reset a database that holds
+work somebody entered** — it is a TRUNCATE of every table, and one keystroke
+from erasing a month of minutes. `SEED_FORCE=1` overrides it, deliberately.
 
 **When something fails on a machine, run `pnpm doctor` (or double-click
 `DOCTOR.bat`) before anything else.** It checks the migrations, the schema

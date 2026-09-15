@@ -155,7 +155,7 @@ pnpm lint                # must be clean; --max-warnings 0
 pnpm typecheck
 
 pnpm db:migrate          # create a new migration after editing schema.prisma
-pnpm db:reset            # drop, re-migrate, re-seed
+pnpm db:reset            # drop, re-migrate, re-seed - destroys everything
 pnpm db:studio           # browse the data
 pnpm assert:invariants   # re-check the two database guarantees
 pnpm assert:schema       # every Prisma field must name a column that exists
@@ -178,6 +178,17 @@ order these things actually go wrong:
 It leaves nothing behind: what is already recorded it re-saves unchanged, and
 anything it adds in order to try a write it removes again. Only the audit trail
 keeps a record, because that is append-only by design.
+
+**Will running SETUP.bat again wipe what I have entered?** No. The seed loads
+the demo dataset by TRUNCATEing every table first, so it now checks whether the
+database holds anything a person entered and stops if it does, changing nothing.
+The verification step stands down at the same time, because the prototype's
+figures only apply to a freshly seeded database. To load the demo data anyway
+and lose what is there, say so outright:
+
+```powershell
+$env:SEED_FORCE=1 ; pnpm db:seed
+```
 
 **A save fails, but everything reads fine.** Almost always the database is
 older than the code: a migration on disk was never applied, so the column the
