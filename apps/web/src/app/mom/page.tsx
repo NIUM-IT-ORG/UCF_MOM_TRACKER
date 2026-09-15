@@ -35,7 +35,7 @@ export default function MomRegisterPage() {
       setRows(await api<MomRow[]>(`/mom${states ? `?state=${states}` : ''}`));
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load the register.');
+      setError(err instanceof ApiError ? err.display : 'Could not load the register.');
     }
   }, [states]);
 

@@ -91,7 +91,7 @@ export default function InstantMeetingPage() {
 
       router.push(`/meetings/${meeting.id}?tab=agenda`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not start the meeting.');
+      setError(err instanceof ApiError ? err.display : 'Could not start the meeting.');
       setBusy(false);
     }
   }

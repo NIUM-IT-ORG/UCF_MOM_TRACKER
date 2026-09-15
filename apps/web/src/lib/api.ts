@@ -14,9 +14,28 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly details?: unknown,
+    /** On the response header and in the body — quote it in a bug report. */
+    readonly requestId?: string,
+    /** One line naming the fault. Development builds only. */
+    readonly fault?: string,
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /**
+   * What to put on the screen.
+   *
+   * A 500 is the only case where the message alone is useless, so that is the
+   * only case where the reference and the cause are appended. Everything else
+   * already says what the officer did wrong and how to fix it.
+   */
+  get display(): string {
+    if (this.status < 500) return this.message;
+    const parts = [this.message];
+    if (this.fault) parts.push(this.fault);
+    if (this.requestId) parts.push(`Reference ${this.requestId}`);
+    return parts.join(' · ');
   }
 }
 
@@ -48,12 +67,24 @@ export async function api<T>(
   const body: unknown = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const err = (body as { error?: { code: string; message: string; details?: unknown } })?.error;
+    const err = (
+      body as {
+        error?: {
+          code: string;
+          message: string;
+          details?: unknown;
+          requestId?: string;
+          fault?: string;
+        };
+      }
+    )?.error;
     throw new ApiError(
       err?.code ?? 'INTERNAL',
       err?.message ?? `Request failed (${res.status}).`,
       res.status,
       err?.details,
+      err?.requestId ?? res.headers.get('x-request-id') ?? undefined,
+      err?.fault,
     );
   }
 

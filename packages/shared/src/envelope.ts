@@ -42,6 +42,22 @@ export interface ApiError {
   code: ErrorCode;
   message: string;
   details?: unknown;
+  /**
+   * The request id, also on the `x-request-id` response header.
+   *
+   * Every error carries it so that a screenshot of a failure is enough to find
+   * the line in the log. "Something went wrong" with no reference is a support
+   * call nobody can answer.
+   */
+  requestId?: string;
+  /**
+   * One line naming the fault. Present on a 500 outside production only —
+   * never the stack, which would help somebody probing the service.
+   *
+   * Named `fault` rather than `cause` because `cause` is a standard property
+   * of `Error`, and shadowing it in the client class is a needless trap.
+   */
+  fault?: string;
 }
 
 export type ApiSuccess<T> = { data: T };

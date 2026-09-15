@@ -123,7 +123,7 @@ export default function ScheduledWizard() {
       await loadAgenda(meeting.id);
       setStep(1);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the meeting.');
+      setError(err instanceof ApiError ? err.display : 'Could not save the meeting.');
     } finally {
       setBusy(false);
     }
@@ -150,7 +150,7 @@ export default function ScheduledWizard() {
       setNewPoint('');
       await loadAgenda(meetingId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add that point.');
+      setError(err instanceof ApiError ? err.display : 'Could not add that point.');
     } finally {
       setBusy(false);
     }
@@ -162,7 +162,7 @@ export default function ScheduledWizard() {
       await api(`/meetings/${meetingId}/agenda-items/${id}`, { method: 'DELETE' });
       await loadAgenda(meetingId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not remove that point.');
+      setError(err instanceof ApiError ? err.display : 'Could not remove that point.');
     }
   }
 
@@ -185,7 +185,7 @@ export default function ScheduledWizard() {
       setCarry({});
       await loadAgenda(meetingId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not carry those items forward.');
+      setError(err instanceof ApiError ? err.display : 'Could not carry those items forward.');
     } finally {
       setBusy(false);
     }
@@ -202,7 +202,7 @@ export default function ScheduledWizard() {
       });
       setStep(3);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the invitees.');
+      setError(err instanceof ApiError ? err.display : 'Could not save the invitees.');
     } finally {
       setBusy(false);
     }
@@ -216,7 +216,7 @@ export default function ScheduledWizard() {
       await api(`/meetings/${meetingId}/confirm`, { method: 'POST' });
       router.push(`/meetings/${meetingId}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not confirm the meeting.');
+      setError(err instanceof ApiError ? err.display : 'Could not confirm the meeting.');
       setBusy(false);
     }
   }

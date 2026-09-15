@@ -51,7 +51,7 @@ export default function LoginPage() {
       setHint(devOtp ? `Development build — your code is ${devOtp}` : null);
       setStep('otp');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
+      setError(err instanceof ApiError ? err.display : 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
@@ -69,7 +69,7 @@ export default function LoginPage() {
       router.push(next.startsWith('/') ? next : '/');
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.');
+      setError(err instanceof ApiError ? err.display : 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }

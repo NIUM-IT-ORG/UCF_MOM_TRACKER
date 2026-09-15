@@ -107,7 +107,7 @@ export function ItemForm({
       setTouched(false);
       onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not record that.');
+      setError(err instanceof ApiError ? err.display : 'Could not record that.');
     } finally {
       setBusy(false);
     }

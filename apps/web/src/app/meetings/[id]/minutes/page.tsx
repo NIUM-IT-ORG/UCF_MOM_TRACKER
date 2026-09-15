@@ -56,7 +56,7 @@ export default function MinutesPage() {
         err instanceof ApiError
           ? err.code === 'NOT_FOUND'
             ? 'That meeting is not one you have access to.'
-            : err.message
+            : err.display
           : 'Could not load the minutes.',
       );
     }
@@ -82,7 +82,7 @@ export default function MinutesPage() {
         err instanceof ApiError
           ? err.code === 'MINUTES_LOCKED'
             ? 'These minutes are locked while the MoM is with the approver. Ask for it to be returned.'
-            : err.message
+            : err.display
           : 'Could not save.',
       );
       if (err instanceof ApiError && err.code === 'MINUTES_LOCKED') setLocked(true);

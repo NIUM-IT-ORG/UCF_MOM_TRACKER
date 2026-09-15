@@ -44,7 +44,7 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
       setRemark('');
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'That did not work.');
+      setError(err instanceof ApiError ? err.display : 'That did not work.');
     } finally {
       setBusy(null);
     }
@@ -82,7 +82,7 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
       setFile(null);
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not circulate the MoM.');
+      setError(err instanceof ApiError ? err.display : 'Could not circulate the MoM.');
     } finally {
       setBusy(null);
     }

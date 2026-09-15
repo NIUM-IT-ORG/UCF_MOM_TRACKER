@@ -82,7 +82,7 @@ export function DocumentUpload({
 
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add the document.');
+      setError(err instanceof ApiError ? err.display : 'Could not add the document.');
     } finally {
       setBusy(false);
     }

@@ -105,7 +105,7 @@ export default function ProjectDetail() {
         err instanceof ApiError
           ? err.code === 'NOT_FOUND'
             ? 'That project is not one you have access to.'
-            : err.message
+            : err.display
           : 'Could not load the project.',
       );
     }

@@ -49,7 +49,7 @@ export function MeetingActions({
       setReason('');
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'That did not work.');
+      setError(err instanceof ApiError ? err.display : 'That did not work.');
     } finally {
       setBusy(null);
     }

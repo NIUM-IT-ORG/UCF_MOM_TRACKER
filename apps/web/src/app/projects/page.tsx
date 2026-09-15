@@ -29,7 +29,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     api<ProjectRow[]>('/projects')
       .then(setProjects)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load projects.'));
+      .catch((err) => setError(err instanceof ApiError ? err.display : 'Could not load projects.'));
   }, []);
 
   return (

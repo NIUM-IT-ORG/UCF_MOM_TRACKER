@@ -65,7 +65,7 @@ export default function PeoplePage() {
           set([]);
           setFailed((f) => ({
             ...f,
-            [key]: err instanceof ApiError ? err.message : 'That list could not be loaded.',
+            [key]: err instanceof ApiError ? err.display : 'That list could not be loaded.',
           }));
         });
 

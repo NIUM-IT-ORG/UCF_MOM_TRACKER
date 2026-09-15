@@ -27,7 +27,7 @@ export default function MinutesIndex() {
           ),
         ),
       )
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load meetings.'));
+      .catch((err) => setError(err instanceof ApiError ? err.display : 'Could not load meetings.'));
   }, []);
 
   const waiting = rows?.filter((m) => !m.moms[0] || m.moms[0].state === 'NOT_GENERATED') ?? [];

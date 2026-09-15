@@ -53,7 +53,7 @@ export default function MeetingsPage() {
       setRows(await api<MeetingRow[]>(`/meetings?${params.toString()}`));
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load meetings.');
+      setError(err instanceof ApiError ? err.display : 'Could not load meetings.');
     }
   }, [stages, type, category, projectId, q]);
 

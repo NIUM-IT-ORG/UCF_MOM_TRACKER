@@ -80,7 +80,7 @@ export default function MeetingPage() {
         err instanceof ApiError
           ? err.code === 'NOT_FOUND'
             ? 'That meeting is not one you have access to.'
-            : err.message
+            : err.display
           : 'Could not load the meeting.',
       );
     }
@@ -296,7 +296,7 @@ function AttendanceTab({
       });
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save attendance.');
+      setError(err instanceof ApiError ? err.display : 'Could not save attendance.');
     } finally {
       setBusy(false);
     }
@@ -310,7 +310,7 @@ function AttendanceTab({
       });
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not record your response.');
+      setError(err instanceof ApiError ? err.display : 'Could not record your response.');
     }
   }
 
