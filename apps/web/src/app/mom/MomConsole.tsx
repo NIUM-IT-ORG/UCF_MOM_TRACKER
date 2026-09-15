@@ -186,6 +186,17 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
                 Upload the signed copy &amp; circulate
               </button>
             )}
+            {mom.state === 'APPROVED' && !canSign && (
+              <span className="text-[12px] text-muted">
+                Approved. It goes live once the coordinator uploads the signed copy — that needs
+                the <b>Upload the signed MoM</b> capability, which your designation does not carry.
+              </span>
+            )}
+            {mom.state === 'DRAFT' && !canMinute && (
+              <span className="text-[12px] text-muted">
+                A draft. Submitting it for approval needs the <b>Record minutes</b> capability.
+              </span>
+            )}
             {mom.state === 'SIGNED' && canMinute && (
               <button
                 className="btn-ghost"
