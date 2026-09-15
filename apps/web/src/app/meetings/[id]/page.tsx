@@ -16,7 +16,13 @@ import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useSetCrumbTail } from '@/lib/crumb';
 import { formatBytes, formatDate } from '@/lib/format';
-import { nextStep, timeRange, type ItemRow, type MeetingDetail, type MomRow } from '@/lib/meetings';
+import {
+  nextStep,
+  timeRange,
+  type ItemRow,
+  type MeetingDetail,
+  type MomRow,
+} from '@/lib/meetings';
 import {
   Avatar,
   Card,
@@ -31,6 +37,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import { MeetingActions } from './MeetingActions';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const TABS = ['agenda', 'attendance', 'items', 'documents', 'mom'] as const;
 type TabKey = (typeof TABS)[number];
@@ -178,7 +185,14 @@ export default function MeetingPage() {
         />
       )}
       {tab === 'items' && <ItemsTab meeting={meeting} items={items} />}
-      {tab === 'documents' && <DocumentsTab docs={docs} />}
+      {tab === 'documents' && (
+        <DocumentsTab
+          meetingId={meeting.id}
+          docs={docs}
+          canUpload={caps.includes('manage_project_docs')}
+          onUploaded={() => void load()}
+        />
+      )}
       {tab === 'mom' && <MomTab meeting={meeting} mom={mom} />}
     </>
   );
@@ -201,12 +215,16 @@ function AgendaTab({ meeting }: { meeting: MeetingDetail }) {
     <div className="grid gap-4">
       {meeting.agendaFreezeAt && (
         <Notice>
-          Invitee contributions {new Date(meeting.agendaFreezeAt) <= new Date() ? 'closed' : 'close'}{' '}
+          Invitee contributions{' '}
+          {new Date(meeting.agendaFreezeAt) <= new Date() ? 'closed' : 'close'}{' '}
           <b>{formatDate(meeting.agendaFreezeAt)}</b>. The coordinator can still edit until the
           meeting is confirmed.
         </Notice>
       )}
-      <Card title="Agenda" tag={meeting.stage === 'CONFIRMED' ? 'Circulated and frozen' : 'Draft'}>
+      <Card
+        title="Agenda"
+        tag={meeting.stage === 'CONFIRMED' ? 'Circulated and frozen' : 'Draft'}
+      >
         <ol className="m-0 list-none p-0">
           {meeting.agenda.map((a) => (
             <li key={a.id} className="border-b border-line px-[17px] py-3.5 last:border-0">
@@ -219,11 +237,15 @@ function AgendaTab({ meeting }: { meeting: MeetingDetail }) {
                   {a.ordinal}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <b className={`text-[13px] text-navy ${a.isDeferred ? 'line-through opacity-70' : ''}`}>
+                  <b
+                    className={`text-[13px] text-navy ${a.isDeferred ? 'line-through opacity-70' : ''}`}
+                  >
                     {a.text}
                   </b>
                   {a.isDeferred && (
-                    <small className="ml-2 text-[11px] font-semibold text-accent">deferred</small>
+                    <small className="ml-2 text-[11px] font-semibold text-accent">
+                      deferred
+                    </small>
                   )}
 
                   {a.carriedItems.length > 0 && (
@@ -233,11 +255,15 @@ function AgendaTab({ meeting }: { meeting: MeetingDetail }) {
                           key={c.item.id}
                           className="flex list-none flex-wrap items-center gap-2 rounded-lg bg-[#F9FBFD] px-2.5 py-1.5 text-[12px]"
                         >
-                          <span className="font-mono text-[11px] font-bold text-navy">{c.item.ref}</span>
+                          <span className="font-mono text-[11px] font-bold text-navy">
+                            {c.item.ref}
+                          </span>
                           <span className="min-w-0 flex-1 truncate">{c.item.description}</span>
                           <ItemStatusChip
                             type={c.item.type}
-                            status={(c.item.actionStatus ?? c.item.clarificationStatus) as never}
+                            status={
+                              (c.item.actionStatus ?? c.item.clarificationStatus) as never
+                            }
                           />
                           {c.revisedDue && (
                             <span className="text-[11px] text-muted">
@@ -276,7 +302,9 @@ function AttendanceTab({
 }) {
   const [marks, setMarks] = useState<Record<string, AttendanceMark>>(() =>
     Object.fromEntries(
-      meeting.invitees.filter((i) => i.attendance).map((i) => [i.user.id, i.attendance as AttendanceMark]),
+      meeting.invitees
+        .filter((i) => i.attendance)
+        .map((i) => [i.user.id, i.attendance as AttendanceMark]),
     ),
   );
   const [busy, setBusy] = useState(false);
@@ -336,7 +364,9 @@ function AttendanceTab({
                 {RSVP_LABEL[r]}
               </button>
             ))}
-            {mine.rsvp && <span className="text-[12px] text-muted">Recorded — you can change it.</span>}
+            {mine.rsvp && (
+              <span className="text-[12px] text-muted">Recorded — you can change it.</span>
+            )}
           </div>
         </Card>
       )}
@@ -347,8 +377,8 @@ function AttendanceTab({
       >
         {!held && (
           <Notice>
-            Attendance is recorded once the meeting has been held. Marking everyone is what lets the
-            MoM be generated.
+            Attendance is recorded once the meeting has been held. Marking everyone is what lets
+            the MoM be generated.
           </Notice>
         )}
         <TableWrap>
@@ -419,12 +449,18 @@ function AttendanceTab({
 
         {canMark && held && (
           <div className="flex flex-wrap items-center gap-2.5 border-t border-line px-[17px] py-3.5">
-            <button className="btn-primary" type="button" onClick={() => void save()} disabled={busy}>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={() => void save()}
+              disabled={busy}
+            >
               {busy ? 'Saving…' : 'Save attendance'}
             </button>
             {unmarked.length > 0 && (
               <span className="text-[12px] text-muted">
-                {unmarked.length} still unmarked — the MoM cannot be generated until everyone is.
+                {unmarked.length} still unmarked — the MoM cannot be generated until everyone
+                is.
               </span>
             )}
           </div>
@@ -452,8 +488,8 @@ function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[]
     <div className="grid gap-4">
       {inert > 0 && (
         <Notice tone="amber">
-          {inert} of these {inert === 1 ? 'is' : 'are'} <b>not yet active</b>. Nobody has been told
-          about them and no reminders will go out until the signed MoM is circulated.
+          {inert} of these {inert === 1 ? 'is' : 'are'} <b>not yet active</b>. Nobody has been
+          told about them and no reminders will go out until the signed MoM is circulated.
         </Notice>
       )}
       <Card title="Actions & clarifications" tag={`${items.length} raised here`}>
@@ -477,7 +513,9 @@ function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[]
                   <td>
                     {i.description}
                     {i.remarks && (
-                      <small className="mt-0.5 block text-[11.5px] text-muted">{i.remarks}</small>
+                      <small className="mt-0.5 block text-[11.5px] text-muted">
+                        {i.remarks}
+                      </small>
                     )}
                   </td>
                   <td>
@@ -510,49 +548,97 @@ function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[]
   );
 }
 
-function DocumentsTab({ docs }: { docs: MeetingDoc[] }) {
-  if (docs.length === 0) {
-    return (
-      <Card>
-        <Empty>Nothing filed against this meeting yet.</Empty>
-      </Card>
-    );
-  }
+function DocumentsTab({
+  meetingId,
+  docs,
+  canUpload,
+  onUploaded,
+}: {
+  meetingId: string;
+  docs: MeetingDoc[];
+  canUpload: boolean;
+  onUploaded: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+
   return (
-    <Card title="Documents" tag={`${docs.length} on file`}>
-      <TableWrap>
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>File</th>
-              <th>Added by</th>
-              <th>Added</th>
-            </tr>
-          </thead>
-          <tbody>
-            {docs.map((d) => (
-              <tr key={d.id}>
-                <td>
-                  <b className="text-navy">{d.name}</b>
-                  {d.remarks && <small className="mt-0.5 block text-[11.5px] text-muted">{d.remarks}</small>}
-                </td>
-                <td className="whitespace-nowrap">{DOCUMENT_TYPE_LABEL[d.type] ?? d.type}</td>
-                <td>
-                  <a href={`/api/v1/files/${d.file.id}/content`} className="font-medium">
-                    {d.file.fileName}
-                  </a>
-                  <small className="ml-1.5 text-[11px] text-muted">{formatBytes(d.file.sizeBytes)}</small>
-                </td>
-                <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
-                <td className="whitespace-nowrap">{formatDate(d.createdAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </TableWrap>
-    </Card>
+    <div className="grid gap-4">
+      {!canUpload && (
+        <Notice>
+          You can read these, but tabling a paper needs the <b>Add project documents</b>{' '}
+          capability. Your designation does not carry it.
+        </Notice>
+      )}
+
+      {canUpload && !adding && (
+        <div>
+          <button className="btn-primary" onClick={() => setAdding(true)} type="button">
+            Add a document
+          </button>
+        </div>
+      )}
+
+      {adding && (
+        <DocumentUpload
+          target={`meetings/${meetingId}`}
+          onDone={() => {
+            setAdding(false);
+            onUploaded();
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      )}
+
+      <Card title="Documents" tag={`${docs.length} on file`}>
+        {docs.length === 0 ? (
+          <Empty>
+            Nothing tabled at this meeting yet. Papers circulated with the agenda, presentations
+            shown, and anything handed round belong here.
+          </Empty>
+        ) : (
+          <TableWrap>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>File</th>
+                  <th>Added by</th>
+                  <th>Added</th>
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((d) => (
+                  <tr key={d.id}>
+                    <td>
+                      <b className="text-navy">{d.name}</b>
+                      {d.remarks && (
+                        <small className="mt-0.5 block text-[11.5px] text-muted">
+                          {d.remarks}
+                        </small>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      {DOCUMENT_TYPE_LABEL[d.type] ?? d.type}
+                    </td>
+                    <td>
+                      <a href={`/api/v1/files/${d.file.id}/content`} className="font-medium">
+                        {d.file.fileName}
+                      </a>
+                      <small className="ml-1.5 text-[11px] text-muted">
+                        {formatBytes(d.file.sizeBytes)}
+                      </small>
+                    </td>
+                    <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
+                    <td className="whitespace-nowrap">{formatDate(d.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -594,7 +680,12 @@ function MomTab({ meeting, mom }: { meeting: MeetingDetail; mom: MomRow | null }
           )}
 
           <div className="flex flex-wrap gap-2.5">
-            <a className="btn-primary" href={`/api/v1/meetings/${meeting.id}/mom.html`} target="_blank" rel="noreferrer">
+            <a
+              className="btn-primary"
+              href={`/api/v1/meetings/${meeting.id}/mom.html`}
+              target="_blank"
+              rel="noreferrer"
+            >
               Open the document
             </a>
             <Link className="btn-ghost" href={`/mom?meeting=${meeting.id}`}>
@@ -607,8 +698,8 @@ function MomTab({ meeting, mom }: { meeting: MeetingDetail; mom: MomRow | null }
             )}
           </div>
           <p className="mb-0 mt-3 text-[11.5px] text-muted">
-            The document opens print-ready at A4 with its watermark. Use your browser’s
-            “Save as PDF” for a copy to send on.
+            The document opens print-ready at A4 with its watermark. Use your browser’s “Save as
+            PDF” for a copy to send on.
           </p>
         </div>
       </Card>

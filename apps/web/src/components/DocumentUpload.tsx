@@ -15,13 +15,19 @@ const TYPES = Object.keys(DOCUMENT_TYPE_LABEL) as DocumentType[];
  * softened by whoever is in a hurry. It is enforced on the server; the form
  * only saves the officer a round trip. Note that the name is asked for *first*
  * — the moment someone uploads a file is the only moment they know what it is.
+ *
+ * One component, both places it is needed. A project's sanction order and a
+ * meeting's tabled paper are the same three-step upload against the same
+ * contract, and the only thing that differs is which collection it lands in —
+ * so that is the only thing passed in.
  */
 export function DocumentUpload({
-  projectId,
+  target,
   onDone,
   onCancel,
 }: {
-  projectId: string;
+  /** `projects/<id>` or `meetings/<id>` — the collection the document joins. */
+  target: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -70,7 +76,7 @@ export function DocumentUpload({
       }
 
       // Step three: the document that gives the file a name.
-      await api(`/projects/${projectId}/documents`, {
+      await api(`/${target}/documents`, {
         method: 'POST',
         body: JSON.stringify({
           name: name.trim(),

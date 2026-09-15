@@ -19,7 +19,7 @@ import {
   TableWrap,
   Tabs,
 } from '@/components/ui';
-import { DocumentUpload } from './DocumentUpload';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 interface Ulb {
   id: string;
@@ -351,7 +351,7 @@ function DocumentsTab({
 
       {adding && (
         <DocumentUpload
-          projectId={projectId}
+          target={`projects/${projectId}`}
           onDone={() => {
             setAdding(false);
             onUploaded();
