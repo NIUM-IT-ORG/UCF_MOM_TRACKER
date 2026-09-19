@@ -4,6 +4,29 @@ import { AppError } from '../../common/app-error.js';
 import { visibleUsersScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { hashPassword } from '../auth/auth.service.js';
+import {
+  lockoutMessage,
+  unknownCapabilities,
+  wouldLockEverybodyOut,
+  type DesignationRow,
+} from './lockout.js';
+
+export interface UpdateUserInput {
+  name?: string;
+  initials?: string;
+  email?: string;
+  mobile?: string;
+  designationCode?: string;
+  departmentId?: string;
+  seesAllProjects?: boolean;
+}
+
+export interface DesignationInput {
+  code?: string;
+  name: string;
+  band: string;
+  caps: string[];
+}
 
 export interface CreateUserInput {
   name: string;
@@ -109,6 +132,65 @@ export class MastersService {
     });
   }
 
+  /**
+   * Editing an officer. Their designation can change — a transfer or a
+   * promotion is the ordinary case — and with it everything they may do,
+   * because capability is computed from the designation and never stored on
+   * the person.
+   *
+   * The email is the sign-in identity, so a clash is refused rather than
+   * merged.
+   */
+  async updateUser(id: string, input: UpdateUserInput) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true },
+    });
+    if (!user) throw AppError.notFound('That officer');
+
+    let designationId: string | undefined;
+    if (input.designationCode) {
+      const designation = await this.prisma.designation.findUnique({
+        where: { code: input.designationCode },
+        select: { id: true, retiredAt: true },
+      });
+      if (!designation || designation.retiredAt) {
+        throw AppError.notFound(`Designation ${input.designationCode}`);
+      }
+      designationId = designation.id;
+    }
+
+    const email = input.email?.toLowerCase();
+    if (email && email !== user.email) {
+      const clash = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (clash) {
+        throw new AppError('VALIDATION_FAILED', 'That email address is already in use.', {
+          field: 'email',
+        });
+      }
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        name: input.name,
+        initials: input.initials?.toUpperCase().slice(0, 3),
+        email,
+        mobile: input.mobile,
+        designationId,
+        departmentId: input.departmentId,
+        seesAllProjects: input.seesAllProjects,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        accountState: true,
+        designation: { select: { code: true, name: true } },
+      },
+    });
+  }
+
   /** Replaces the whole mapping, so removals are as easy as additions. */
   async setUserProjects(
     userId: string,
@@ -184,6 +266,133 @@ export class MastersService {
       },
       orderBy: { code: 'asc' },
     });
+  }
+
+  /**
+   * Creating and editing a designation, capabilities included.
+   *
+   * Two guards, both of which matter more than they look:
+   *
+   * - a capability that the code does not define would sit in the database
+   *   looking authoritative and granting nothing, which is worse than a typo
+   *   that fails;
+   * - and the last active holder of `manage_masters` or `manage_access` may
+   *   not be removed, or nobody can ever edit this screen again.
+   */
+  async createDesignation(input: DesignationInput) {
+    const code = (input.code ?? '').trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9-]{1,11}$/.test(code)) {
+      throw new AppError('VALIDATION_FAILED', 'Give it a short code like PDMC or ULB-EO.', {
+        field: 'code',
+      });
+    }
+    await this.assertCapabilitiesExist(input.caps);
+
+    const existing = await this.prisma.designation.findUnique({
+      where: { code },
+      select: { id: true, retiredAt: true },
+    });
+    if (existing) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        existing.retiredAt
+          ? 'A retired designation already uses that code. Choose another.'
+          : 'A designation with that code already exists.',
+        { field: 'code' },
+      );
+    }
+
+    return this.prisma.designation.create({
+      data: {
+        code,
+        name: input.name,
+        band: input.band,
+        caps: input.caps,
+        isSystem: false,
+      },
+      select: { id: true, code: true, name: true, band: true, caps: true, isSystem: true },
+    });
+  }
+
+  async updateDesignation(id: string, input: DesignationInput) {
+    const designation = await this.prisma.designation.findUnique({
+      where: { id },
+      select: { id: true, code: true, retiredAt: true },
+    });
+    if (!designation || designation.retiredAt) throw AppError.notFound('That designation');
+
+    await this.assertCapabilitiesExist(input.caps);
+    await this.assertNobodyIsLockedOut({ id, caps: input.caps });
+
+    return this.prisma.designation.update({
+      where: { id },
+      data: { name: input.name, band: input.band, caps: input.caps },
+      select: { id: true, code: true, name: true, band: true, caps: true, isSystem: true },
+    });
+  }
+
+  /**
+   * Retire, never delete — the same reason as departments. Minutes name the
+   * designation somebody held at the time, and those records have to stay
+   * readable.
+   */
+  async retireDesignation(id: string) {
+    const designation = await this.prisma.designation.findUnique({
+      where: { id },
+      select: { id: true, retiredAt: true, _count: { select: { users: true } } },
+    });
+    if (!designation || designation.retiredAt) throw AppError.notFound('That designation');
+    if (designation._count.users > 0) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${designation._count.users} officer(s) still hold that designation. Move them to another one first.`,
+      );
+    }
+    await this.assertNobodyIsLockedOut({ id, caps: [], retired: true });
+
+    return this.prisma.designation.update({
+      where: { id },
+      data: { retiredAt: new Date() },
+      select: { id: true, code: true, retiredAt: true },
+    });
+  }
+
+  private async assertCapabilitiesExist(caps: string[]): Promise<void> {
+    const unknown = unknownCapabilities(caps);
+    if (unknown.length > 0) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `No such capability: ${unknown.join(', ')}. The list comes from the code, so this is a typo or an old name.`,
+        { field: 'caps', unknown },
+      );
+    }
+  }
+
+  private async assertNobodyIsLockedOut(change: {
+    id: string;
+    caps: string[];
+    retired?: boolean;
+  }): Promise<void> {
+    const rows = await this.prisma.designation.findMany({
+      where: { retiredAt: null },
+      select: {
+        id: true,
+        code: true,
+        caps: true,
+        _count: { select: { users: { where: { accountState: 'ACTIVE' } } } },
+      },
+    });
+    const current: DesignationRow[] = rows.map((d) => ({
+      id: d.id,
+      code: d.code,
+      caps: d.caps,
+      activeUsers: d._count.users,
+    }));
+
+    const lost = wouldLockEverybodyOut(current, change);
+    if (lost.length > 0) {
+      throw new AppError('VALIDATION_FAILED', lockoutMessage(lost), { field: 'caps', lost });
+    }
   }
 
   listDepartments() {

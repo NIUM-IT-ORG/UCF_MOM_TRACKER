@@ -163,6 +163,20 @@ pnpm assert:schema       # every Prisma field must name a column that exists
 pnpm doctor              # what is actually wrong, in one command
 ```
 
+## The state emblem on the MoM
+
+Every MoM prints a masthead: the emblem, **Government of Telangana**, and the
+Municipal Administration Department. Put the official emblem file here:
+
+```
+app\var\branding\emblem.png
+```
+
+PNG, JPEG or SVG; anything about 300 px tall or larger prints cleanly. The API
+reads it once at startup, so restart RUN.bat after adding or replacing it.
+Until it is there the masthead prints without a crest — deliberately, because a
+stand-in emblem on a document that goes on the record would be worse than none.
+
 ## When something does not work
 
 **Start with `DOCTOR.bat`.** Leave `RUN.bat` running in its own window,

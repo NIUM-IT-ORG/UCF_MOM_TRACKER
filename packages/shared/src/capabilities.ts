@@ -1,5 +1,5 @@
 /**
- * The seventeen capabilities. This file is the only place they are defined.
+ * The eighteen capabilities. This file is the only place they are defined.
  * A capability string must never be typed as a literal anywhere else.
  *
  * Capabilities are granted to a DESIGNATION, never to a user. Data scope
@@ -17,7 +17,8 @@ export const CAPABILITIES = {
   update_own_item: 'Update an item assigned to me',
   respond_clarification: 'Respond to a clarification',
   confirm_completion: 'Confirm an item as completed',
-  approve_mom: 'Approve the MoM',
+  approve_mom: 'Approve the MoM and route it for signature',
+  sign_mom: 'Sign a MoM routed to me',
   upload_signed: 'Upload the signed MoM',
   manage_project_docs: 'Add project documents',
   manage_masters: 'Manage master data',
@@ -36,11 +37,12 @@ export const ALL_CAPABILITIES = Object.keys(CAPABILITIES) as Capability[];
  * this constant is the starting state, not the enforcement point.
  */
 export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
-  MD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects', 'share_object'],
-  AMD: ['add_agenda', 'confirm_completion', 'approve_mom', 'view_all_projects', 'share_object'],
+  MD: ['add_agenda', 'confirm_completion', 'sign_mom', 'view_all_projects', 'share_object'],
+  AMD: ['add_agenda', 'confirm_completion', 'sign_mom', 'view_all_projects', 'share_object'],
   CDMA: ['view_all_projects', 'share_object'],
   PD: [
     'add_agenda',
+    'approve_mom',
     'record_minutes',
     'create_items',
     'update_own_item',
@@ -83,6 +85,18 @@ export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
   SYS: ['manage_masters', 'manage_access', 'view_all_projects', 'share_object'],
   EXT: [],
 };
+
+/**
+ * The MoM chain, named once.
+ *
+ * Meeting Coordinator records and submits → Project Coordinator validates,
+ * approves, and chooses who signs → that officer, and only that officer,
+ * signs. Two different capabilities, held by different offices, because the
+ * point of the chain is that the person who checks the document is not the
+ * person who puts their name to it.
+ */
+export const MOM_APPROVER: Capability = 'approve_mom';
+export const MOM_SIGNER: Capability = 'sign_mom';
 
 /** Capability check. Scope is a separate question — never conflate the two. */
 export function hasCapability(caps: readonly string[], required: Capability): boolean {

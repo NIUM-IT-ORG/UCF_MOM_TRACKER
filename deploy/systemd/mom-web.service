@@ -1,0 +1,51 @@
+[Unit]
+Description=UCF Meeting & Action Item Tracker — web
+Documentation=file://@APP_DIR@/deploy/README.md
+After=network-online.target mom-api.service
+Wants=network-online.target mom-api.service
+
+# Restart rate limiting lives in [Unit]: systemd ignores StartLimit* in
+# [Service], silently, so a crash loop would have run unthrottled.
+StartLimitIntervalSec=120
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@/apps/web
+EnvironmentFile=/etc/mom/mom.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# nginx sends /api/v1/ straight to the API, so this rewrite is only the
+# fallback for anything that reaches Next directly.
+Environment=API_URL=http://127.0.0.1:4000
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 3000
+
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mom-web
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Next writes its build cache under .next/cache while serving.
+ReadWritePaths=@APP_DIR@/apps/web/.next
+
+[Install]
+WantedBy=multi-user.target

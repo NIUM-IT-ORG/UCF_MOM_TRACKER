@@ -38,6 +38,8 @@ import {
 } from '@/components/ui';
 import { MeetingActions } from './MeetingActions';
 import { GenerateMom } from './GenerateMom';
+import { MomPreview } from '@/components/MomPreview';
+import { WhoCan } from '@/components/WhoCan';
 import { DocumentUpload } from '@/components/DocumentUpload';
 
 const TABS = ['agenda', 'attendance', 'items', 'documents', 'mom'] as const;
@@ -573,8 +575,11 @@ function DocumentsTab({
     <div className="grid gap-4">
       {!canUpload && (
         <Notice>
-          You can read these, but tabling a paper needs the <b>Add project documents</b>{' '}
-          capability. Your designation does not carry it.
+          <WhoCan
+            capability="manage_project_docs"
+            lead="You can read these; filing one is somebody else's step."
+            who="On this meeting that is"
+          />
         </Notice>
       )}
 
@@ -717,6 +722,8 @@ function MomTab({
               </a>
             )}
           </div>
+          <MomPreview meetingId={meeting.id} label={`The document · version ${mom.version}`} />
+
           <p className="mb-0 mt-3 text-[11.5px] text-muted">
             The document opens print-ready at A4 with its watermark. Use your browser’s “Save as
             PDF” for a copy to send on.

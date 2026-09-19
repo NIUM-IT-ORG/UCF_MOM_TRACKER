@@ -1,8 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CAPABILITIES, type Capability } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
+import { useSession } from '@/lib/session';
+import { PersonForm } from './PersonForm';
+import { DesignationForm } from './DesignationForm';
 import { formatDate } from '@/lib/format';
 import { Avatar, Card, Empty, PageHead, ProjectTag, TableWrap, Tabs } from '@/components/ui';
 
@@ -46,7 +50,16 @@ interface Effective {
 }
 
 export default function PeoplePage() {
-  const [tab, setTab] = useState('people');
+  const { caps } = useSession();
+  // The tab is in the URL so a link can point at one — "grant it on People &
+  // designations" is only useful if it lands on the designations.
+  const params = useSearchParams();
+  const requested = params.get('tab');
+  const [tab, setTab] = useState(
+    ['people', 'designations', 'departments'].includes(requested ?? '') ? requested! : 'people',
+  );
+  const [personForm, setPersonForm] = useState<{ person?: Person } | null>(null);
+  const [designationForm, setDesignationForm] = useState<{ designation?: Designation } | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [designations, setDesignations] = useState<Designation[] | null>(null);
   const [departments, setDepartments] = useState<Department[] | null>(null);
@@ -54,7 +67,7 @@ export default function PeoplePage() {
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<Record<string, string>>({});
 
-  useEffect(() => {
+  const loadAll = useCallback(() => {
     // Each list is fetched on its own. With Promise.all a single failing call
     // empties all three tabs and the officer cannot tell which one broke; here
     // the two that worked still render and only the third says so.
@@ -76,6 +89,12 @@ export default function PeoplePage() {
     ]);
   }, []);
 
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const canManage = caps.includes('manage_masters');
+
   async function check(userId: string) {
     try {
       setChecking(await api<Effective>(`/access/effective/${userId}`));
@@ -94,7 +113,64 @@ export default function PeoplePage() {
         eyebrow="Masters"
         title="People & designations"
         lede="Officers on your projects, plus everyone who sees every project. What each of them may do comes from their designation — never from anything set on the person."
+        actions={
+          canManage && !personForm && !designationForm ? (
+            tab === 'designations' ? (
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => setDesignationForm({})}
+              >
+                New designation
+              </button>
+            ) : tab === 'people' ? (
+              <button className="btn-primary" type="button" onClick={() => setPersonForm({})}>
+                Add an officer
+              </button>
+            ) : null
+          ) : null
+        }
       />
+
+      {personForm && designations && departments && (
+        <div className="mb-4">
+          <PersonForm
+            personId={personForm.person?.id}
+            initial={
+              personForm.person && {
+                name: personForm.person.name,
+                initials: personForm.person.initials,
+                email: personForm.person.email,
+                mobile: personForm.person.mobile,
+                designationCode: personForm.person.designation.code,
+                departmentId: personForm.person.department.id,
+                seesAllProjects: personForm.person.seesAllProjects,
+                password: '',
+              }
+            }
+            designations={designations}
+            departments={departments}
+            onSaved={() => {
+              setPersonForm(null);
+              loadAll();
+            }}
+            onCancel={() => setPersonForm(null)}
+          />
+        </div>
+      )}
+
+      {designationForm && (
+        <div className="mb-4">
+          <DesignationForm
+            designation={designationForm.designation}
+            onSaved={() => {
+              setDesignationForm(null);
+              loadAll();
+            }}
+            onCancel={() => setDesignationForm(null)}
+          />
+        </div>
+      )}
 
       {error && (
         <Card>
@@ -170,7 +246,16 @@ export default function PeoplePage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap">{formatDate(p.lastLoginAt)}</td>
-                      <td>
+                      <td className="whitespace-nowrap text-right">
+                        {canManage && (
+                          <button
+                            className="btn-ghost"
+                            type="button"
+                            onClick={() => setPersonForm({ person: p })}
+                          >
+                            Edit
+                          </button>
+                        )}
                         <button className="btn-ghost" type="button" onClick={() => void check(p.id)}>
                           Check access
                         </button>
@@ -200,6 +285,7 @@ export default function PeoplePage() {
                     <th>Band</th>
                     <th>Capabilities</th>
                     <th>Officers</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -220,6 +306,17 @@ export default function PeoplePage() {
                         )}
                       </td>
                       <td className="tabular-nums">{d._count.users}</td>
+                      <td className="text-right">
+                        {canManage && (
+                          <button
+                            className="btn-ghost"
+                            type="button"
+                            onClick={() => setDesignationForm({ designation: d })}
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

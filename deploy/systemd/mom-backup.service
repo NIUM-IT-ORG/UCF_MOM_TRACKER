@@ -1,0 +1,25 @@
+[Unit]
+Description=UCF Tracker — nightly database backup to S3
+Documentation=file://@APP_DIR@/deploy/README.md
+After=postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=/etc/mom/mom.env
+ExecStart=@APP_DIR@/deploy/backup.sh
+
+# A failed backup must be loud. Without this the timer keeps firing, every run
+# fails, and nobody finds out until the day the restore is needed.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mom-backup
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=@APP_HOME@/backups

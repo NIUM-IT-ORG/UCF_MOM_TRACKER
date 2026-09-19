@@ -1,0 +1,72 @@
+{
+  "Version": "2012-10-17",
+  "Comment": [
+    "IAM policy for the EC2 instance role of the UCF Meeting & Action Item Tracker.",
+    "",
+    "Replace ucf-mom-files with the real bucket name and attach this to a role,",
+    "then attach the role to the instance. Do not create an IAM user for this:",
+    "a role rotates its own credentials and cannot be pasted into a chat message.",
+    "",
+    "The shape that matters is the split between the two prefixes. The",
+    "application reads, writes and deletes under files/ because officers delete",
+    "documents. It may only WRITE under backups/ — no delete, no overwrite of",
+    "history — so an instance that is compromised, or a script that is wrong,",
+    "cannot destroy the backups. Expiry is the bucket's lifecycle rule, which",
+    "this role has no power over.",
+    "",
+    "JSON has no comments; strip this key before uploading, or paste the",
+    "Statement array alone into the console."
+  ],
+  "Statement": [
+    {
+      "Sid": "AppReadsAndWritesDocuments",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::ucf-mom-files/files/*"
+    },
+    {
+      "Sid": "BackupsAreWriteOnly",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": "arn:aws:s3:::ucf-mom-files/backups/*"
+    },
+    {
+      "Sid": "RestoreReadsBackups",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::ucf-mom-files/backups/*"
+    },
+    {
+      "Sid": "ListOnlyWhatItUses",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::ucf-mom-files",
+      "Condition": {
+        "StringLike": { "s3:prefix": ["files/*", "backups/*"] }
+      }
+    },
+    {
+      "Sid": "WriteItsOwnLogsAndMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "cloudwatch:PutMetricData"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SessionManagerInsteadOfAnSshKey",
+      "Effect": "Allow",
+      "Action": [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+        "ssm:UpdateInstanceInformation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

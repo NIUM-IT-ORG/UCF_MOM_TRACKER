@@ -34,14 +34,27 @@ const schema = z.object({
   /** `local` writes to LOCAL_STORAGE_DIR; `s3` needs the S3_* block. */
   STORAGE_DRIVER: z.enum(['local', 's3', 'memory']).default('local'),
   LOCAL_STORAGE_DIR: z.string().default('./var/files'),
+  /** Only for an S3-compatible store such as MinIO. Leave unset for AWS. */
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().optional(),
   S3_BUCKET: z.string().optional(),
+  /** Everything this application writes sits under one prefix, so a bucket can be shared. */
+  S3_PREFIX: z.string().optional(),
+  S3_SSE: z.enum(['AES256', 'aws:kms']).optional(),
+  S3_KMS_KEY_ID: z.string().optional(),
+  /**
+   * The fallback, not the plan. On EC2 leave both unset and attach an instance
+   * role: a role rotates itself, and it cannot be pasted into a chat message.
+   */
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 
-  /** PROVIDER NOT YET DECIDED — `console` writes .eml files you can open. */
-  EMAIL_PROVIDER: z.enum(['console', 'smtp']).default('console'),
+  /**
+   * `none` is the deployed setting. The client chose WhatsApp only, so nothing
+   * should try to send email — and nothing should quietly write .eml files to
+   * a server's disk either, which is what `console` would do there.
+   */
+  EMAIL_PROVIDER: z.enum(['none', 'console', 'smtp']).default('console'),
   EMAIL_FROM: z.string().default('UCF Tracker <no-reply@example.gov>'),
   EMAIL_OUTBOX_DIR: z.string().default('./var/mail'),
   SMTP_HOST: z.string().optional(),
@@ -78,11 +91,28 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): Env {
   }
   if (env.NODE_ENV === 'production') {
     if (env.EMAIL_PROVIDER === 'console') {
-      throw new Error('EMAIL_PROVIDER=console is a development-only sink.');
+      throw new Error(
+        'EMAIL_PROVIDER=console is a development-only sink — it writes .eml files to disk ' +
+          'that nobody will ever read. Use EMAIL_PROVIDER=none (this deployment is ' +
+          'WhatsApp-only) or configure smtp.',
+      );
     }
     if (env.QUEUE_DRIVER === 'memory') {
       throw new Error(
         'QUEUE_DRIVER=memory loses queued messages on restart. Use bullmq in production.',
+      );
+    }
+    /*
+     * The box is disposable; the bucket is not. Uploaded sanction orders and
+     * signed minutes on an instance's root volume are gone the first time that
+     * instance is replaced, and nothing in the application would notice — the
+     * database row would still be there, pointing at bytes that no longer
+     * exist. That failure is silent for months and then total.
+     */
+    if (env.STORAGE_DRIVER !== 's3') {
+      throw new Error(
+        `STORAGE_DRIVER=${env.STORAGE_DRIVER} in production would put uploaded documents on ` +
+          'the instance filesystem, which is replaced on every deployment. Use s3.',
       );
     }
   }

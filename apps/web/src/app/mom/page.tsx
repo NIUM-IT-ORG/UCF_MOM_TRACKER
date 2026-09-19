@@ -92,7 +92,7 @@ export default function MomRegisterPage() {
         ) : rows.length === 0 ? (
           <Empty>
             Nothing here.{' '}
-            {view === 'approval' && caps.includes('approve_mom')
+            {view === 'approval' && (caps.includes('approve_mom') || caps.includes('sign_mom'))
               ? 'No MoM is waiting on you.'
               : 'A MoM appears once it has been generated from a meeting’s minutes.'}
           </Empty>

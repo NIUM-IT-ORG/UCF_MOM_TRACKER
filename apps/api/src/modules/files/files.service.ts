@@ -73,7 +73,14 @@ export class FilesService {
   async storeContent(fileId: string, bytes: Buffer, userId: string) {
     const file = await this.prisma.storedFile.findUnique({
       where: { id: fileId },
-      select: { id: true, objectKey: true, uploadedById: true, uploadedAt: true },
+      select: {
+        id: true,
+        objectKey: true,
+        uploadedById: true,
+        uploadedAt: true,
+        fileName: true,
+        mimeType: true,
+      },
     });
     if (!file) throw AppError.notFound('That file');
 
@@ -89,7 +96,10 @@ export class FilesService {
       throw new AppError('VALIDATION_FAILED', `Files must be under ${MAX_BYTES / 1024 / 1024} MB.`);
     }
 
-    const stored = await this.storage.put(file.objectKey, bytes);
+    const stored = await this.storage.put(file.objectKey, bytes, {
+      contentType: file.mimeType,
+      fileName: file.fileName,
+    });
 
     return this.prisma.storedFile.update({
       where: { id: fileId },

@@ -1,7 +1,10 @@
-import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { minutesDto, momDecisionDto, momSignDto } from '@mom/shared';
+import { Body, Controller, Get, Header, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { z } from 'zod';
+import { minutesDto, momDecisionDto } from '@mom/shared';
 import { MomService } from './mom.service.js';
 import { MomDocumentService } from './mom.document.js';
+import { MomPrintService } from './mom.print.js';
 import { MinutesService } from '../minutes/minutes.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CapabilityGuard } from '../auth/capability.guard.js';
@@ -9,6 +12,30 @@ import { RequireCapability } from '../auth/require-capability.decorator.js';
 import { CurrentUser, type AuthUser } from '../auth/auth-user.js';
 import { Audited } from '../../common/audit.interceptor.js';
 import { RawResponse } from '../../common/interceptors/envelope.interceptor.js';
+
+const cuid = z.string().trim().min(1);
+
+/**
+ * Approving is now two decisions in one action: this document is correct, and
+ * this officer should sign it. The second is required — an approved MoM with
+ * nobody named is the "approved, awaiting signature, nothing happens" state
+ * the client reported.
+ */
+const momApproveDto = z
+  .object({ signatoryId: cuid, remark: z.string().trim().max(2000).optional() })
+  .strict();
+
+/**
+ * Signing is an act in the system, so nothing is required. `fileId` is for a
+ * wet-signed scan filed afterwards for the physical record; it is not what
+ * makes the MoM signed.
+ *
+ * Declared here rather than in `@mom/shared` deliberately: shared is ESM and
+ * the API compiles to CommonJS, so a DTO that lives there cannot be changed
+ * without rebuilding both. Keeping this one local means a fix to the signing
+ * route is a single-file patch.
+ */
+const momSignDto = z.object({ fileId: cuid.optional() }).strict();
 
 /**
  * The register lives at `/mom`; everything else hangs off the meeting, because
@@ -21,6 +48,7 @@ export class MomController {
     private readonly mom: MomService,
     private readonly minutes: MinutesService,
     private readonly document: MomDocumentService,
+    private readonly print: MomPrintService,
   ) {}
 
   @Get('mom')
@@ -73,15 +101,19 @@ export class MomController {
     return this.mom.submit(user, id);
   }
 
+  /** Who this MoM can be routed to for signature — for the approval dialog. */
+  @Get('meetings/:id/mom/signatories')
+  @RequireCapability('approve_mom')
+  signatories(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.mom.eligibleSignatories(user, id);
+  }
+
   @Post('meetings/:id/mom/approve')
   @RequireCapability('approve_mom')
   approve(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     // A remark is optional on approve, and mandatory on the two refusals.
-    const remark =
-      body && typeof body === 'object' && 'remark' in body
-        ? String((body as { remark: unknown }).remark ?? '').trim()
-        : '';
-    return this.mom.approve(user, id, remark || undefined);
+    const dto = momApproveDto.parse(body);
+    return this.mom.approve(user, id, dto.signatoryId, dto.remark || undefined);
   }
 
   @Post('meetings/:id/mom/return')
@@ -97,7 +129,10 @@ export class MomController {
   }
 
   @Post('meetings/:id/mom/sign')
-  @RequireCapability('upload_signed')
+  // `sign_mom` gets the request this far. Which officer may sign THIS MoM is a
+  // different question, answered by assertMaySign in the service — a capability
+  // cannot express "the one person it was routed to".
+  @RequireCapability('sign_mom')
   @Audited({ objectType: 'MOM', event: 'MOM_CIRCULATED' })
   sign(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     return this.mom.sign(user, id, momSignDto.parse(body));
@@ -123,6 +158,31 @@ export class MomController {
   async document_(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     const { html } = await this.document.html(user, id);
     return html;
+  }
+
+  /**
+   * The same document as a PDF, with the tabled papers behind it.
+   *
+   * The minutes are printed from the one template by a browser already on the
+   * machine, and then each annexure is appended: a separator page carrying its
+   * reference, then the document itself. A file that cannot be placed inside a
+   * PDF — a .docx, say — gets a page saying so rather than being left out, so
+   * a bundle never quietly carries fewer annexures than the minutes list.
+   */
+  @Get('meetings/:id/mom.pdf')
+  @RawResponse()
+  @Header('content-type', 'application/pdf')
+  @Header('x-content-type-options', 'nosniff')
+  async pdf(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { bytes, fileName } = await this.print.pdf(user, id);
+    // `inline`, not `attachment`: the officer nearly always wants to look at
+    // it first, and every browser offers Save from its own viewer.
+    res.setHeader('content-disposition', `inline; filename="${fileName}"`);
+    return Buffer.from(bytes);
   }
 
   @Post('meetings/:id/mom/corrigendum')

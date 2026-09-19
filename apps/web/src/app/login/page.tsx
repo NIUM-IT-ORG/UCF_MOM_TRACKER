@@ -17,7 +17,7 @@ const DEMO_OFFICERS = [
   { email: 'officer.a@example.gov', name: 'Officer A', role: 'Mission Director', colour: '#BF3B2B' },
   { email: 'officer.c@example.gov', name: 'Officer C', role: 'PDMC', colour: '#D9772B' },
   { email: 'officer.d@example.gov', name: 'Officer D', role: 'Meeting Coordinator · Project 1', colour: '#2E5FA3' },
-  { email: 'officer.g@example.gov', name: 'Officer G', role: 'Project Director', colour: '#B2427A' },
+  { email: 'officer.g@example.gov', name: 'Officer G', role: 'Project Coordinator', colour: '#B2427A' },
   { email: 'officer.h@example.gov', name: 'Officer H', role: 'ULB Nodal Officer', colour: '#7D3C98' },
   { email: 'officer.k@example.gov', name: 'Officer K', role: 'CDMA', colour: '#5E7DAA' },
   { email: 'officer.l@example.gov', name: 'Officer L', role: 'System Administrator', colour: '#64707F' },

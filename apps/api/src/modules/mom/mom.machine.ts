@@ -66,3 +66,59 @@ export function assertMutable(state: MomState): void {
 export function minutesLockedIn(state: MomState): boolean {
   return state === 'SUBMITTED' || state === 'APPROVED' || state === 'SIGNED';
 }
+
+/**
+ * Who may sign this MoM.
+ *
+ * Approval and signature are separate acts by separate offices: the Project
+ * Coordinator validates the document and nominates one executive, and that
+ * executive signs. So "may I sign?" is not a capability question — holding
+ * `sign_mom` is necessary and not sufficient. The Mission Director may not
+ * sign a MoM routed to the Additional Mission Director, and the reverse.
+ *
+ * Written as a pure function, and separately from the service, because it is
+ * the rule the whole chain rests on and it should be readable without a
+ * database.
+ */
+export interface SigningCheck {
+  /** The officer the Project Coordinator nominated. Null before approval. */
+  signatoryId: string | null;
+  /** Who is asking. */
+  userId: string;
+  /** Does this user's designation carry `sign_mom` at all? */
+  canSign: boolean;
+}
+
+export function assertMaySign(state: MomState, check: SigningCheck): void {
+  if (state !== 'APPROVED') {
+    throw AppError.badTransition(state, 'sign');
+  }
+  if (!check.signatoryId) {
+    // Only reachable for a MoM approved before the routing step existed.
+    throw new AppError(
+      'VALIDATION_FAILED',
+      'This MoM was approved without a signing officer being chosen. ' +
+        'Ask the Project Coordinator to return it and approve it again.',
+    );
+  }
+  if (check.signatoryId !== check.userId) {
+    /*
+     * 404-shaped elsewhere, deliberately not here. This is not "you may not
+     * see this"; the officer can see the document perfectly well and is
+     * looking at it. Telling them plainly that it is with someone else is the
+     * whole reason they opened the screen.
+     */
+    throw new AppError(
+      'NOT_YOUR_SIGNATURE',
+      'This MoM was routed to a different officer for signature. Only the officer it was sent to can sign it.',
+    );
+  }
+  if (!check.canSign) {
+    // Belt and braces: someone nominated before their designation changed.
+    throw new AppError(
+      'FORBIDDEN_CAPABILITY',
+      'Your designation no longer carries the authority to sign a MoM.',
+      { capability: 'sign_mom' },
+    );
+  }
+}

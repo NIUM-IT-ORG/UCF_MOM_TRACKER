@@ -1,0 +1,58 @@
+[Unit]
+Description=UCF Meeting & Action Item Tracker — API
+Documentation=file://@APP_DIR@/deploy/README.md
+# Both are on this box. The API fails its own health check without either, so
+# these are about a clean boot, not about correctness.
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+
+# Restart rate limiting lives in [Unit]: systemd ignores StartLimit* in
+# [Service], silently, so a crash loop would have run unthrottled.
+StartLimitIntervalSec=120
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=/etc/mom/mom.env
+ExecStart=/usr/bin/node apps/api/dist/main.js
+
+# Restart always, but back off. A process that cannot reach the database will
+# crash on boot; restarting it five times a second turns one problem into a
+# machine nobody can ssh into.
+Restart=always
+RestartSec=5
+
+# Give in-flight requests — an upload, a MoM render — a chance to finish.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mom-api
+
+# ── hardening ──
+# This process handles uploaded files from the internet. It has no business
+# writing anywhere but its own var directory, and none at all outside it.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=@APP_HOME@/var
+
+[Install]
+WantedBy=multi-user.target

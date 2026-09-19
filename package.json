@@ -26,6 +26,7 @@
     "db:local": "node scripts/local-db.mjs start",
     "db:local:init": "node scripts/local-db.mjs init",
     "db:local:setup": "node scripts/local-db.mjs run db:apply db:seed assert:schema assert:invariants assert:seed",
+    "db:local:run": "node scripts/local-db.mjs run db:apply assert:schema",
     "db:seed": "tsx prisma/seed.ts",
     "assert:invariants": "tsx scripts/assert-invariants.ts",
     "assert:schema": "node scripts/assert-schema.mjs",

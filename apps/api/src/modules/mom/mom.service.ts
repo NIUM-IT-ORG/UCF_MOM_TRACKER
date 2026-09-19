@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import type { MomDecisionDto, MomSignDto, MomState } from '@mom/shared';
+import type { MomDecisionDto, MomState } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
@@ -12,6 +12,7 @@ import { MinutesService } from '../minutes/minutes.service.js';
 import { FilesService } from '../files/files.service.js';
 import {
   advanceMom,
+  assertMaySign,
   assertMutable,
   submitEventFor,
   versionAfter,
@@ -26,6 +27,14 @@ const MOM_SELECT = {
   submittedAt: true,
   decidedAt: true,
   decisionRemark: true,
+  signatoryId: true,
+  signedById: true,
+  signedAt: true,
+  // The screen has to name the officer it is waiting on. Without this it can
+  // only say "with the approver", which is what the client reported as being
+  // stuck at "Approved — awaiting signature".
+  signatory: { select: { id: true, name: true, designation: { select: { name: true } } } },
+  signedBy: { select: { id: true, name: true, designation: { select: { name: true } } } },
   signedUploadedAt: true,
   circulatedAt: true,
   correctsMomId: true,
@@ -252,10 +261,63 @@ export class MomService {
     });
   }
 
-  /** Approve. A remark is optional here and mandatory on return and reject. */
-  async approve(user: AuthUser, meetingId: string, remark?: string) {
+  /**
+   * Who can be sent this MoM for signature.
+   *
+   * Holders of `sign_mom` who can see one of the meeting's projects — in
+   * practice the Additional Mission Director and the Mission Director. Read
+   * from the designation rather than from a hard-coded pair of codes, so that
+   * a System Administrator adding a third signing office at runtime does not
+   * need a release.
+   */
+  async eligibleSignatories(user: AuthUser, meetingId: string) {
+    const meeting = await this.meetings.mustSee(user, meetingId);
+    return this.signatoryChoices(meeting.projects.map((p) => p.projectId));
+  }
+
+  private signatoryChoices(projectIds: string[]) {
+    return this.prisma.user.findMany({
+      where: {
+        accountState: 'ACTIVE',
+        designation: { caps: { has: 'sign_mom' } },
+        OR: [{ projects: { some: { projectId: { in: projectIds } } } }, { seesAllProjects: true }],
+      },
+      select: {
+        id: true,
+        name: true,
+        initials: true,
+        designation: { select: { code: true, name: true } },
+      },
+      orderBy: [{ designation: { band: 'asc' } }, { name: 'asc' }],
+    });
+  }
+
+  /**
+   * Approve, and route it to one officer for signature.
+   *
+   * The signatory is required, not optional. An approved MoM with nobody named
+   * is a document sitting in a state where every executive can see it and none
+   * of them has been asked — which is precisely the "approved, awaiting
+   * signature, nothing happens" complaint this chain exists to fix.
+   *
+   * A remark is optional here and mandatory on return and reject.
+   */
+  async approve(user: AuthUser, meetingId: string, signatoryId: string, remark?: string) {
     const { meeting, mom } = await this.mustHaveMom(user, meetingId);
     const to = advanceMom(mom.state, 'approve');
+
+    // Check the nominee before the transaction: a name chosen from a stale
+    // dropdown must fail with something an officer can act on, not a foreign
+    // key error.
+    const eligible = await this.signatoryChoices(meeting.projects.map((p) => p.projectId));
+    const signatory = eligible.find((s) => s.id === signatoryId);
+    if (!signatory) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        'Choose an officer who can sign this MoM — the Additional Mission Director or the Mission Director for this project.',
+        { field: 'signatoryId' },
+      );
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.mom.update({
@@ -265,16 +327,18 @@ export class MomService {
           decidedById: user.id,
           decidedAt: new Date(),
           decisionRemark: remark ?? null,
+          signatoryId: signatory.id,
         },
         select: MOM_SELECT,
       });
+      const routedTo = `Routed to ${signatory.name}, ${signatory.designation.name}, for signature.`;
       await tx.momHistory.create({
         data: {
           momId: mom.id,
           event: 'APPROVED',
           version: mom.version,
           actorId: user.id,
-          remark: remark ?? null,
+          remark: remark ? `${remark} — ${routedTo}` : routedTo,
         },
       });
       await tx.auditEntry.create({
@@ -284,9 +348,10 @@ export class MomService {
           objectId: mom.id,
           objectRef: meeting.code,
           event: 'MOM_APPROVED',
-          detail: remark ?? null,
+          detail: remark ? `${remark} — ${routedTo}` : routedTo,
         },
       });
+      // Back to whoever produced it: approved, and now with this officer.
       await this.events.emit(
         {
           eventCode: 'MOM-03',
@@ -296,7 +361,35 @@ export class MomService {
           templateKey: 'ucf_mom_approved',
           triggeredById: user.id,
           recipientIds: await this.coordinatorIds(tx, meeting.id),
-          payload: { title: meeting.title, remark: remark ?? null },
+          payload: {
+            title: meeting.title,
+            remark: remark ?? null,
+            signatoryName: signatory.name,
+            signatoryDesignation: signatory.designation.name,
+          },
+        },
+        tx,
+      );
+      /*
+       * And to the officer themselves. Without this the routing is a database
+       * column: the Project Coordinator believes they have sent it, and the
+       * Mission Director has no idea anything is waiting. That is the failure
+       * this whole change was asked for.
+       */
+      await this.events.emit(
+        {
+          eventCode: 'MOM-04',
+          subjectType: 'MOM',
+          subjectId: mom.id,
+          subjectRef: meeting.code,
+          templateKey: 'ucf_mom_awaiting_signature',
+          triggeredById: user.id,
+          recipientIds: [signatory.id],
+          payload: {
+            title: meeting.title,
+            approvedByName: user.name,
+            meetingDate: meeting.meetingDate,
+          },
         },
         tx,
       );
@@ -378,6 +471,17 @@ export class MomService {
   /**
    * Signing and circulating — the hinge of the whole product.
    *
+   * The signature is made in the system, not on paper. The officer the Project
+   * Coordinator nominated opens the document and signs it; the name, the
+   * designation and the exact moment are recorded and printed on the document
+   * beside a green tick. Nothing is scanned, so nothing can be backdated and
+   * there is no window in which the register says "approved" and the file says
+   * nothing.
+   *
+   * A wet-signed scan may still be filed afterwards for the physical record —
+   * `fileId` is optional and, when given, is stored alongside. It is not what
+   * makes the MoM signed.
+   *
    * On SIGNED, in one transaction:
    *   1. every Item for that meeting gets activatedAt = now();
    *   2. ACT-01 fires once per responsible officer;
@@ -388,35 +492,51 @@ export class MomService {
    * the worst possible failure here: the document says the officers were told,
    * the register says nothing is outstanding, and nobody finds out for a month.
    */
-  async sign(user: AuthUser, meetingId: string, dto: MomSignDto) {
+  async sign(user: AuthUser, meetingId: string, dto: { fileId?: string }) {
     const { meeting, mom } = await this.mustHaveMom(user, meetingId);
     const to = advanceMom(mom.state, 'sign');
 
-    const file = await this.files.requireUploaded(dto.fileId);
-    if (file.mimeType !== 'application/pdf') {
-      throw new AppError(
-        'VALIDATION_FAILED',
-        'The signed MoM has to be a PDF — a scan of the signed copy.',
-        { field: 'fileId' },
-      );
+    /*
+     * Holding `sign_mom` got this request past the guard. That is not the
+     * question here: this MoM was routed to one named officer, and the whole
+     * point of the routing step is that nobody else can sign it.
+     */
+    assertMaySign(mom.state, {
+      signatoryId: mom.signatoryId,
+      userId: user.id,
+      canSign: user.caps.includes('sign_mom'),
+    });
+
+    // Optional: the wet-signed scan, for the physical file.
+    if (dto.fileId) {
+      const file = await this.files.requireUploaded(dto.fileId);
+      if (file.mimeType !== 'application/pdf') {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'The signed copy has to be a PDF — a scan of the signed document.',
+          { field: 'fileId' },
+        );
+      }
     }
 
-    // The page-count and action-row check (P4-08) compares the scan against the
-    // approved draft. Rendering the draft is Phase 4's PDF work; until the
-    // renderer runs in this environment the check is performed on what can be
-    // established from the stored bytes, and the count it needs is recorded so
-    // the comparison is exact rather than approximate.
-    const actionCount = await this.prisma.item.count({ where: { meetingId, type: 'ACTION' } });
+    const signedAt = new Date();
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.mom.update({
         where: { id: mom.id },
         data: {
           state: to,
-          signedFileId: dto.fileId,
-          signedUploadedById: user.id,
-          signedUploadedAt: new Date(),
-          circulatedAt: new Date(),
+          signedById: user.id,
+          signedAt,
+          // Only set when a scan was filed; signing itself needs no upload.
+          ...(dto.fileId
+            ? {
+                signedFileId: dto.fileId,
+                signedUploadedById: user.id,
+                signedUploadedAt: signedAt,
+              }
+            : {}),
+          circulatedAt: signedAt,
         },
         select: MOM_SELECT,
       });
@@ -473,7 +593,20 @@ export class MomService {
         );
       }
 
-      // 3 · MOM-05 to everyone who was invited
+      /*
+       * 3 · MOM-05 to everyone who was invited.
+       *
+       * The annexures travel with it. They are carried as file ids in the
+       * payload rather than as an afterthought for the WhatsApp adapter to
+       * work out later: a minute that says "see the revised estimate at A-01"
+       * and arrives without A-01 is the thing the client asked us to prevent.
+       */
+      const annexures = await tx.document.findMany({
+        where: { meetingId },
+        select: { name: true, fileId: true, file: { select: { fileName: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+
       await this.events.emit(
         {
           eventCode: 'MOM-05',
@@ -488,6 +621,14 @@ export class MomService {
             version: mom.version,
             actions: items.filter((i) => i.type === 'ACTION').length,
             clarifications: items.filter((i) => i.type === 'CLARIFICATION').length,
+            signedByName: user.name,
+            signedByDesignation: user.designationName,
+            annexures: annexures.map((a, n) => ({
+              ref: `A-${String(n + 1).padStart(2, '0')}`,
+              name: a.name,
+              fileId: a.fileId,
+              fileName: a.file.fileName,
+            })),
           },
         },
         tx,
@@ -499,6 +640,15 @@ export class MomService {
       await tx.momHistory.create({
         data: { momId: mom.id, event: 'CIRCULATED', version: mom.version, actorId: user.id },
       });
+      await tx.momHistory.create({
+        data: {
+          momId: mom.id,
+          event: 'SIGNED',
+          version: mom.version,
+          actorId: user.id,
+          remark: `Signed in the system by ${user.name}, ${user.designationName}.`,
+        },
+      });
       await tx.auditEntry.create({
         data: {
           actorId: user.id,
@@ -507,7 +657,12 @@ export class MomService {
           objectRef: meeting.code,
           event: 'MOM_CIRCULATED',
           detail: `${items.length} item(s) activated`,
-          after: { activated: items.map((i) => i.ref), actionCount },
+          after: {
+            activated: items.map((i) => i.ref),
+            signedBy: user.name,
+            signedAt: signedAt.toISOString(),
+            scanFiled: Boolean(dto.fileId),
+          },
         },
       });
 
@@ -581,6 +736,9 @@ export class MomService {
       id: true,
       state: true,
       version: true,
+      // Needed by sign(): who this MoM was routed to. Read here so every
+      // caller has it rather than a second query on the one path that cares.
+      signatoryId: true,
     });
     if (!mom) {
       throw new AppError(

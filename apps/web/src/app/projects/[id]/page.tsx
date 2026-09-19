@@ -20,6 +20,10 @@ import {
   Tabs,
 } from '@/components/ui';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { ProjectForm } from '../ProjectForm';
+import { UlbForm } from './UlbForm';
+import { MembersForm } from './MembersForm';
+import { WhoCan } from '@/components/WhoCan';
 
 interface Ulb {
   id: string;
@@ -91,6 +95,7 @@ export default function ProjectDetail() {
   const [project, setProject] = useState<Project | null>(null);
   const [docs, setDocs] = useState<ProjectDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -155,9 +160,40 @@ export default function ProjectDetail() {
           <>
             <ProjectTag code={project.code} />
             <StatusChip status={project.status} />
+            {caps.includes('manage_masters') && !editing && (
+              <button className="btn-ghost" type="button" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
           </>
         }
       />
+
+      {editing && (
+        <div className="mb-4">
+          <ProjectForm
+            projectId={project.id}
+            initial={{
+              code: project.code,
+              name: project.name,
+              fullName: project.fullName,
+              description: project.description ?? '',
+              status: project.status,
+              implementingAgency: project.implementingAgency ?? '',
+              costCr: project.costCr,
+              debtSanctionedCr: project.debtSanctionedCr,
+              debtDrawnCr: project.debtDrawnCr,
+              startDate: project.startDate?.slice(0, 10) ?? '',
+              targetEndDate: project.targetEndDate?.slice(0, 10) ?? '',
+            }}
+            onSaved={() => {
+              setEditing(false);
+              void load();
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        </div>
+      )}
 
       <Tabs
         active={tab}
@@ -171,8 +207,22 @@ export default function ProjectDetail() {
       />
 
       {tab === 'info' && <InfoTab project={project} />}
-      {tab === 'officers' && <OfficersTab members={project.members} />}
-      {tab === 'ulb' && <UlbTab ulbs={project.ulbs} />}
+      {tab === 'officers' && (
+        <OfficersTab
+          projectId={project.id}
+          members={project.members}
+          canManage={caps.includes('manage_masters')}
+          onChanged={() => void load()}
+        />
+      )}
+      {tab === 'ulb' && (
+        <UlbTab
+          projectId={project.id}
+          ulbs={project.ulbs}
+          canManage={caps.includes('manage_masters')}
+          onChanged={() => void load()}
+        />
+      )}
       {tab === 'documents' && (
         <DocumentsTab
           projectId={project.id}
@@ -222,15 +272,61 @@ function InfoTab({ project }: { project: Project }) {
   );
 }
 
-function OfficersTab({ members }: { members: Member[] }) {
+function OfficersTab({
+  projectId,
+  members,
+  canManage,
+  onChanged,
+}: {
+  projectId: string;
+  members: Member[];
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <MembersForm
+        projectId={projectId}
+        current={members}
+        onSaved={() => {
+          setEditing(false);
+          onChanged();
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
   if (members.length === 0) {
     return (
       <Card>
-        <Empty>No officers are mapped to this project yet. Add them on the People screen.</Empty>
+        <Empty>
+          No officers are mapped to this project yet — which means nobody but the head-office
+          officers can see it.
+          {canManage ? (
+            <div className="mt-3">
+              <button className="btn-primary" type="button" onClick={() => setEditing(true)}>
+                Add officers
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3">Mapping them needs the Manage master data capability.</div>
+          )}
+        </Empty>
       </Card>
     );
   }
   return (
+    <div className="grid gap-4">
+      {canManage && (
+        <div>
+          <button className="btn-primary" type="button" onClick={() => setEditing(true)}>
+            Add or remove officers
+          </button>
+        </div>
+      )}
     <Card title="Officers on this project" tag="Their designation decides what they may do">
       <TableWrap>
         <table>
@@ -271,18 +367,64 @@ function OfficersTab({ members }: { members: Member[] }) {
         </table>
       </TableWrap>
     </Card>
+    </div>
   );
 }
 
-function UlbTab({ ulbs }: { ulbs: Ulb[] }) {
+function UlbTab({
+  projectId,
+  ulbs,
+  canManage,
+  onChanged,
+}: {
+  projectId: string;
+  ulbs: Ulb[];
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const [form, setForm] = useState<{ ulb?: Ulb } | null>(null);
+
+  const editor = form && (
+    <UlbForm
+      projectId={projectId}
+      ulb={form.ulb}
+      onSaved={() => {
+        setForm(null);
+        onChanged();
+      }}
+      onCancel={() => setForm(null)}
+    />
+  );
+
   if (ulbs.length === 0) {
     return (
-      <Card>
-        <Empty>No ULBs recorded for this project yet.</Empty>
-      </Card>
+      <div className="grid gap-4">
+        {editor}
+        <Card>
+          <Empty>
+            No ULBs recorded for this project yet.
+            {canManage && !form && (
+              <div className="mt-3">
+                <button className="btn-primary" type="button" onClick={() => setForm({})}>
+                  Add a ULB
+                </button>
+              </div>
+            )}
+          </Empty>
+        </Card>
+      </div>
     );
   }
   return (
+    <div className="grid gap-4">
+      {editor}
+      {canManage && !form && (
+        <div>
+          <button className="btn-primary" type="button" onClick={() => setForm({})}>
+            Add a ULB
+          </button>
+        </div>
+      )}
     <Card title="Urban local bodies" tag="Exactly one is the lead">
       <TableWrap>
         <table>
@@ -293,6 +435,7 @@ function UlbTab({ ulbs }: { ulbs: Ulb[] }) {
               <th>Wards</th>
               <th>Nodal officer</th>
               <th>Contact</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -310,12 +453,24 @@ function UlbTab({ ulbs }: { ulbs: Ulb[] }) {
                 <td className="tabular-nums">{u.wards ?? '—'}</td>
                 <td>{u.nodalName ?? '—'}</td>
                 <td className="whitespace-nowrap">{u.contact ?? '—'}</td>
+                <td className="text-right">
+                  {canManage && (
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      onClick={() => setForm({ ulb: u })}
+                    >
+                      Edit
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </TableWrap>
     </Card>
+    </div>
   );
 }
 
@@ -336,8 +491,11 @@ function DocumentsTab({
     <div className="grid gap-4">
       {!canUpload && (
         <Notice>
-          You can read these, but adding a document needs the{' '}
-          <b>Add project documents</b> capability. Your designation does not carry it.
+          <WhoCan
+            capability="manage_project_docs"
+            lead="You can read these; filing one is somebody else's step."
+            who="On this project that is"
+          />
         </Notice>
       )}
 

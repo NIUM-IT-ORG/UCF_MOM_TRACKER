@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { ProjectStatus } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
+import { useSession } from '@/lib/session';
+import { ProjectForm } from './ProjectForm';
 import { drawnPercent, formatCrore, formatDate } from '@/lib/format';
 import { Card, Empty, PageHead, ProjectTag, StatusChip } from '@/components/ui';
 
@@ -23,14 +26,23 @@ export interface ProjectRow {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter();
+  const { caps } = useSession();
   const [projects, setProjects] = useState<ProjectRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api<ProjectRow[]>('/projects')
       .then(setProjects)
       .catch((err) => setError(err instanceof ApiError ? err.display : 'Could not load projects.'));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const canManage = caps.includes('manage_masters');
 
   return (
     <>
@@ -38,7 +50,27 @@ export default function ProjectsPage() {
         eyebrow="Masters"
         title="Projects"
         lede="Only the projects you are mapped to. Everything else is not merely hidden — it is not there, as far as this application is concerned."
+        actions={
+          canManage && !adding ? (
+            <button className="btn-primary" type="button" onClick={() => setAdding(true)}>
+              New project
+            </button>
+          ) : null
+        }
       />
+
+      {adding && (
+        <div className="mb-4">
+          <ProjectForm
+            onSaved={(id) => {
+              setAdding(false);
+              load();
+              router.push(`/projects/${id}`);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        </div>
+      )}
 
       {error && (
         <Card>

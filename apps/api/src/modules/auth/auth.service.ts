@@ -269,7 +269,7 @@ export class AuthService {
         email: true,
         accountState: true,
         seesAllProjects: true,
-        designation: { select: { code: true, caps: true } },
+        designation: { select: { code: true, name: true, caps: true } },
         projects: { select: { projectId: true } },
       },
     });
@@ -280,6 +280,7 @@ export class AuthService {
       name: user.name,
       email: user.email,
       designationCode: user.designation.code,
+      designationName: user.designation.name,
       caps: user.designation.caps,
       projectIds: user.projects.map((p) => p.projectId),
       seesAllProjects: user.seesAllProjects,

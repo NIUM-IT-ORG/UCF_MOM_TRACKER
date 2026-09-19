@@ -154,6 +154,68 @@ export class ProjectsService {
     return serialise(project);
   }
 
+  // ── officers on the project ──────────────────────────────────────────
+
+  /**
+   * Who is on this project, and what they do here.
+   *
+   * Project-centric on purpose. The mapping can be set from either end — an
+   * officer's projects, or a project's officers — and the screen somebody is
+   * standing on decides which they mean. Replacing the whole list makes a
+   * removal as easy as an addition, and makes the operation idempotent.
+   *
+   * This mapping is the *data scope*: adding an officer here is what lets
+   * them see this project's meetings, minutes and items at all. It grants no
+   * capability — that still comes only from the designation.
+   */
+  async setMembers(
+    user: AuthUser,
+    projectId: string,
+    members: { userId: string; roleOnProject: string }[],
+  ) {
+    await this.mustSee(user, projectId);
+
+    const ids = [...new Set(members.map((m) => m.userId))];
+    if (ids.length !== members.length) {
+      throw new AppError('VALIDATION_FAILED', 'An officer appears twice in that list.');
+    }
+
+    const found = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    if (found.length !== ids.length) {
+      throw AppError.notFound('One of those officers');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.projectMember.deleteMany({ where: { projectId } }),
+      this.prisma.projectMember.createMany({
+        data: members.map((m) => ({
+          projectId,
+          userId: m.userId,
+          roleOnProject: m.roleOnProject,
+        })),
+      }),
+    ]);
+
+    return this.prisma.projectMember.findMany({
+      where: { projectId },
+      select: {
+        roleOnProject: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            initials: true,
+            designation: { select: { code: true, name: true } },
+          },
+        },
+      },
+      orderBy: { user: { name: 'asc' } },
+    });
+  }
+
   // ── ULBs ─────────────────────────────────────────────────────────────
 
   async addUlb(user: AuthUser, projectId: string, input: UlbDto) {

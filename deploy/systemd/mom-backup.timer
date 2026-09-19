@@ -1,0 +1,15 @@
+[Unit]
+Description=UCF Tracker — run the database backup nightly
+Documentation=file://@APP_DIR@/deploy/README.md
+
+[Timer]
+# 01:30 Asia/Kolkata. Well clear of any meeting, and before the working day.
+OnCalendar=*-*-* 01:30:00 Asia/Kolkata
+# A box that was asleep or rebooting at 01:30 still gets its backup.
+Persistent=true
+# Spread the load, and avoid every instance in a fleet hitting S3 at once.
+RandomizedDelaySec=300
+Unit=mom-backup.service
+
+[Install]
+WantedBy=timers.target

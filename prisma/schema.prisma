@@ -216,6 +216,10 @@ model User {
   @@index([designationId])
   @@index([departmentId])
   @@map("users")
+
+  /// MoMs routed to this officer for signature, and those they have signed.
+  momsToSign Mom[] @relation("MomSignatory")
+  momsSigned Mom[] @relation("MomSignedBy")
 }
 
 /// The second half of the access rule: which projects a user can see.
@@ -412,6 +416,12 @@ model Mom {
   decidedById    String?   @map("decided_by_id")
   decidedAt      DateTime? @map("decided_at")
   decisionRemark String?   @map("decision_remark")
+  /// Chosen by the Project Coordinator at approval: the one officer who may sign.
+  signatoryId    String?   @map("signatory_id")
+  /// Who actually signed, in the system. Equal to signatoryId in every ordinary case.
+  signedById     String?   @map("signed_by_id")
+  signedAt       DateTime? @map("signed_at")
+  /// Only for a wet-signed scan filed afterwards; signing itself needs no upload.
   signedUploadedById String? @map("signed_uploaded_by_id")
   signedUploadedAt   DateTime? @map("signed_uploaded_at")
   circulatedAt   DateTime? @map("circulated_at")
@@ -421,6 +431,11 @@ model Mom {
   updatedAt      DateTime  @updatedAt
 
   meeting Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  /// The officer this was routed to for signature, and the one who signed.
+  /// Separate fields because "who was asked" and "who did it" are different
+  /// questions, and a document that cannot answer both is not a record.
+  signatory User?     @relation("MomSignatory", fields: [signatoryId], references: [id])
+  signedBy  User?     @relation("MomSignedBy", fields: [signedById], references: [id])
   history MomHistory[]
   corrects Mom?       @relation("MomCorrects", fields: [correctsMomId], references: [id])
   correctedBy Mom[]   @relation("MomCorrects")

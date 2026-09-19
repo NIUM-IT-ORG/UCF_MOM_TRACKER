@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MomController } from './mom.controller.js';
 import { MomService } from './mom.service.js';
 import { MomDocumentService } from './mom.document.js';
+import { MomPrintService } from './mom.print.js';
 import { MinutesService } from '../minutes/minutes.service.js';
 import { MeetingsModule } from '../meetings/meetings.module.js';
 
@@ -12,7 +13,7 @@ import { MeetingsModule } from '../meetings/meetings.module.js';
 @Module({
   imports: [MeetingsModule],
   controllers: [MomController],
-  providers: [MomService, MomDocumentService, MinutesService],
+  providers: [MomService, MomDocumentService, MomPrintService, MinutesService],
   exports: [MomService, MomDocumentService, MinutesService],
 })
 export class MomModule {}

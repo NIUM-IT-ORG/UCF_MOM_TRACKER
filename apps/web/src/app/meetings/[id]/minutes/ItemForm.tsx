@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { PRIORITY_LABEL, type ItemType, type Priority } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { Card, Field, Notice } from '@/components/ui';
-import type { MeetingDetail, Person } from '@/lib/meetings';
+import { Field, Notice } from '@/components/ui';
+import { Modal } from '@/components/Modal';
+import { OfficerPicker, type PickableOfficer } from '@/components/OfficerPicker';
+import type { MeetingDetail } from '@/lib/meetings';
 
 /**
- * One form, two shapes.
+ * One form, two shapes, in a dialog.
  *
  * The dropdown at the top is the only control that changes the form, and it
  * changes it completely: an action has owners, a due date and a priority; a
@@ -18,7 +20,19 @@ import type { MeetingDetail, Person } from '@/lib/meetings';
  *
  * A clarification carrying `ownerIds`, `dueDate` or `priority` is *rejected* by
  * the server rather than silently stripped — so this form never sends them.
+ *
+ * It is a dialog rather than the old panel beside the editor for two reasons.
+ * The panel was 380px wide, which is why the officer picker could show a name
+ * and a three-letter code and nothing else — and choosing who is accountable
+ * deserves to show who the officer is and what they can see. And writing up a
+ * meeting produces four or five commitments in a row, which is what
+ * "Save & add another" is for.
  */
+const TYPE_BLURB: Record<ItemType, string> = {
+  ACTION: 'Action — something someone must do by a date',
+  CLARIFICATION: 'Clarification — a question somebody has to answer',
+};
+
 export function ItemForm({
   meeting,
   enabled,
@@ -29,6 +43,7 @@ export function ItemForm({
   onCreated: () => void;
 }) {
   const { user, caps } = useSession();
+  const [open, setOpen] = useState(false);
   const [type, setType] = useState<ItemType>('ACTION');
   const [description, setDescription] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -37,42 +52,44 @@ export function ItemForm({
   const [owners, setOwners] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState('');
   const [priority, setPriority] = useState<Priority>('MEDIUM');
-  const [respondedById, setRespondedById] = useState('');
-  const [people, setPeople] = useState<Person[]>([]);
+  const [responder, setResponder] = useState<string[]>([]);
+  const [people, setPeople] = useState<PickableOfficer[]>([]);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
-    // The people who were actually in the room come first: an action is nearly
-    // always given to somebody who attended.
-    setPeople(meeting.invitees.map((i) => i.user));
-    api<Person[]>('/users')
+    // The people who were actually in the room come first, and are marked: an
+    // action is nearly always given to somebody who attended.
+    const present = new Set(meeting.invitees.map((i) => i.user.id));
+    setPeople(meeting.invitees.map((i) => ({ ...i.user, attended: true })));
+    api<PickableOfficer[]>('/users')
       .then((all) => {
-        const seen = new Set(meeting.invitees.map((i) => i.user.id));
-        setPeople([...meeting.invitees.map((i) => i.user), ...all.filter((p) => !seen.has(p.id))]);
+        setPeople([
+          ...all.filter((p) => present.has(p.id)).map((p) => ({ ...p, attended: true })),
+          ...all.filter((p) => !present.has(p.id)),
+        ]);
       })
       .catch(() => {});
   }, [meeting.invitees]);
 
+  const canCreate = caps.includes('create_items');
   const descBad = touched && description.trim().length < 5;
   const ownersBad = touched && type === 'ACTION' && owners.length === 0;
   const dueBad = touched && type === 'ACTION' && !dueDate;
 
-  if (!caps.includes('create_items')) {
-    return (
-      <Card title="Raise an action or clarification">
-        <div className="px-[17px] py-4 text-[12.5px] text-muted">
-          This needs the <b>Create actions &amp; clarifications</b> capability. Your designation does
-          not carry it.
-        </div>
-      </Card>
-    );
+  function reset() {
+    setDescription('');
+    setRemarks('');
+    setOwners([]);
+    setDueDate('');
+    setResponder([]);
+    setAgendaItemId('');
+    setTouched(false);
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function save(andAnother: boolean) {
     setTouched(true);
     setError(null);
     setDone(null);
@@ -93,19 +110,18 @@ export function ItemForm({
           ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
           ...(type === 'ACTION'
             ? { ownerIds: owners, dueDate, priority }
-            : respondedById
-              ? { respondedById }
+            : responder[0]
+              ? { respondedById: responder[0] }
               : {}),
         }),
       });
-      setDone(`${created.ref} recorded. It stays inert until the signed MoM is circulated.`);
-      setDescription('');
-      setRemarks('');
-      setOwners([]);
-      setDueDate('');
-      setRespondedById('');
-      setTouched(false);
       onCreated();
+      reset();
+      if (andAnother) {
+        setDone(`${created.ref} recorded. It stays inert until the signed MoM is circulated.`);
+      } else {
+        setOpen(false);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.display : 'Could not record that.');
     } finally {
@@ -113,185 +129,243 @@ export function ItemForm({
     }
   }
 
+  if (!canCreate) {
+    return (
+      <p className="m-0 text-[12.5px] text-muted">
+        Raising an entry needs the <b>Create actions &amp; clarifications</b> capability. Your
+        designation does not carry it.
+      </p>
+    );
+  }
+
   return (
-    <Card title="Raise an action or clarification">
-      <form onSubmit={submit} className="px-[17px] py-4" noValidate>
-        <div className="mb-3 flex gap-1.5">
-          {(['ACTION', 'CLARIFICATION'] as ItemType[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={type === t}
-              onClick={() => {
-                setType(t);
-                setTouched(false);
-              }}
-              className={`flex-1 rounded-[9px] border px-3 py-2 text-[12.5px] font-semibold transition-colors ${
-                type === t
-                  ? 'border-navy bg-navy text-white'
-                  : 'border-line bg-white text-navy hover:border-steel'
-              }`}
-            >
-              {t === 'ACTION' ? 'Action' : 'Clarification'}
-            </button>
-          ))}
-        </div>
-
-        <p className="mb-3 mt-0 text-[11.5px] text-muted">
-          {type === 'ACTION'
-            ? 'Work somebody has to do, by a date. Naming more than one officer makes them jointly and equally accountable.'
-            : 'A question to be answered. No owners, no due date, no priority — one nominated responder.'}
+    <>
+      <button
+        className="btn-primary"
+        type="button"
+        disabled={!enabled}
+        onClick={() => {
+          reset();
+          setError(null);
+          setDone(null);
+          setOpen(true);
+        }}
+      >
+        + Add entry
+      </button>
+      {!enabled && (
+        <p className="mb-0 mt-2 text-[11.5px] text-muted">
+          The minutes are locked while the MoM is with the approver.
         </p>
+      )}
 
-        {done && <Notice tone="green">{done}</Notice>}
-        {error && <Notice tone="red">{error}</Notice>}
-
-        <div className="grid gap-3.5">
-          <Field
-            label={type === 'ACTION' ? 'What has to be done' : 'What needs clarifying'}
-            required
-            error={descBad ? 'Describe it in a sentence somebody else would understand.' : null}
-          >
-            <textarea
-              className={`i min-h-[70px] ${descBad ? 'border-[#D98C7F] bg-[#FEF8F7]' : ''}`}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={
-                type === 'ACTION'
-                  ? 'Submit a week-by-week pipe-laying schedule up to 31 October'
-                  : 'Whether trench barricading cost is met from the contingency head'
-              }
-              aria-invalid={descBad}
-            />
-          </Field>
-
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <Field label="Project" required>
-              <select className="i" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                {meeting.projects.map((p) => (
-                  <option key={p.project.id} value={p.project.id}>
-                    {p.project.code} — {p.project.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Agenda point">
-              <select className="i" value={agendaItemId} onChange={(e) => setAgendaItemId(e.target.value)}>
-                <option value="">Not tied to one</option>
-                {meeting.agenda.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.ordinal}. {a.text.slice(0, 60)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-
-          {type === 'ACTION' ? (
+      {open && (
+        <Modal
+          title="New entry from the minutes"
+          lede="Every commitment in the text becomes an entry — an action with responsible officers and a date, or a clarification with a responder."
+          onClose={() => setOpen(false)}
+          footer={
             <>
-              <Field
-                label="Responsible officers"
-                required
-                error={ownersBad ? 'Name at least one officer. An action with nobody on it is not a commitment.' : null}
-                hint="All named are jointly and equally accountable. Any one may report it complete."
+              <button className="btn-ghost" type="button" onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                disabled={busy}
+                onClick={() => void save(true)}
               >
-                <div
-                  className={`grid max-h-[168px] gap-1 overflow-y-auto rounded-[10px] border p-2 ${
-                    ownersBad ? 'border-[#D98C7F] bg-[#FEF8F7]' : 'border-line bg-white'
-                  }`}
+                {busy ? 'Saving…' : 'Save & add another'}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={busy}
+                onClick={() => void save(false)}
+              >
+                {busy ? 'Saving…' : 'Add entry'}
+              </button>
+            </>
+          }
+        >
+          <form onSubmit={(e) => e.preventDefault()} noValidate>
+            {done && <Notice tone="green">{done}</Notice>}
+            {error && <Notice tone="red">{error}</Notice>}
+
+            <div className="grid gap-4">
+              <Field label="Entry type" required>
+                <select
+                  className="i"
+                  value={type}
+                  onChange={(e) => {
+                    setType(e.target.value as ItemType);
+                    setTouched(false);
+                  }}
                 >
-                  {people.map((p) => {
-                    const on = owners.includes(p.id);
-                    return (
-                      <label
-                        key={p.id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] ${
-                          on ? 'bg-ice text-navy' : 'hover:bg-[#F6F9FC]'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() =>
-                            setOwners((cur) =>
-                              cur.includes(p.id) ? cur.filter((x) => x !== p.id) : [...cur, p.id],
-                            )
-                          }
-                        />
-                        <span className="truncate">
-                          {p.name}
-                          <small className="ml-1.5 text-[11px] text-muted">{p.designation.code}</small>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                  {(['ACTION', 'CLARIFICATION'] as ItemType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_BLURB[t]}
+                    </option>
+                  ))}
+                </select>
               </Field>
 
-              <div className="grid gap-3.5 sm:grid-cols-2">
-                <Field label="Due date" required error={dueBad ? 'Every action needs a date.' : null}>
+              <Field
+                label={type === 'ACTION' ? 'Action description' : 'What needs clarifying'}
+                required
+                error={descBad ? 'Describe it in a sentence somebody else would understand.' : null}
+              >
+                <textarea
+                  className={`i min-h-[78px] ${descBad ? 'border-[#D98C7F] bg-[#FEF8F7]' : ''}`}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={
+                    type === 'ACTION'
+                      ? 'What has to be done — short, specific and testable'
+                      : 'Whether trench barricading cost is met from the contingency head'
+                  }
+                  aria-invalid={descBad}
+                />
+              </Field>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Raised by" fixed>
                   <input
-                    type="date"
-                    className={`i ${dueBad ? 'border-[#D98C7F] bg-[#FEF8F7]' : ''}`}
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    aria-invalid={dueBad}
+                    className="i"
+                    readOnly
+                    value={user ? `${user.name} · ${user.designation.name}` : ''}
                   />
                 </Field>
-                <Field
-                  label="Priority"
-                  hint="Recorded and shown. It does not route confirmation yet."
-                >
+                <Field label="Project" required>
                   <select
                     className="i"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as Priority)}
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
                   >
-                    {(Object.keys(PRIORITY_LABEL) as Priority[]).map((p) => (
-                      <option key={p} value={p}>
-                        {PRIORITY_LABEL[p]}
+                    {meeting.projects.map((p) => (
+                      <option key={p.project.id} value={p.project.id}>
+                        {p.project.code} — {p.project.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Agenda point">
+                  <select
+                    className="i"
+                    value={agendaItemId}
+                    onChange={(e) => setAgendaItemId(e.target.value)}
+                  >
+                    <option value="">Not tied to one</option>
+                    {meeting.agenda.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.ordinal}. {a.text.slice(0, 60)}
                       </option>
                     ))}
                   </select>
                 </Field>
               </div>
-            </>
-          ) : (
-            <Field label="Who should answer" hint="Can be left open and nominated later.">
-              <select
-                className="i"
-                value={respondedById}
-                onChange={(e) => setRespondedById(e.target.value)}
-              >
-                <option value="">Nobody yet</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {p.designation.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
 
-          <Field label="Remarks">
-            <input
-              className="i"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Chair's direction: no trench open beyond 72 hours."
-            />
-          </Field>
-        </div>
+              {type === 'ACTION' ? (
+                <>
+                  <Field
+                    label="Responsible officers"
+                    required
+                    hint="Pick one or more; all of them are equally accountable."
+                    error={
+                      ownersBad
+                        ? 'Name at least one officer. An action with nobody on it is not a commitment.'
+                        : null
+                    }
+                  >
+                    <OfficerPicker
+                      people={people}
+                      selected={owners}
+                      onChange={setOwners}
+                      projectId={projectId}
+                      invalid={ownersBad}
+                    />
+                  </Field>
 
-        <button className="btn-primary mt-4" type="submit" disabled={!enabled || busy}>
-          {busy ? 'Recording…' : type === 'ACTION' ? 'Record the action' : 'Record the clarification'}
-        </button>
-        {!enabled && (
-          <p className="mb-0 mt-2 text-[11.5px] text-muted">
-            The minutes are locked while the MoM is with the approver.
-          </p>
-        )}
-      </form>
-    </Card>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <Field
+                      label="Due date"
+                      required
+                      error={dueBad ? 'Every action needs a date.' : null}
+                    >
+                      <input
+                        type="date"
+                        className={`i ${dueBad ? 'border-[#D98C7F] bg-[#FEF8F7]' : ''}`}
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        aria-invalid={dueBad}
+                      />
+                    </Field>
+                    <Field
+                      label="Priority"
+                      fixed
+                      hint="Captured now; which priority needs whose sign-off is still an open decision."
+                    >
+                      <select
+                        className="i"
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as Priority)}
+                      >
+                        {(Object.keys(PRIORITY_LABEL) as Priority[]).map((p) => (
+                          <option key={p} value={p}>
+                            {PRIORITY_LABEL[p]}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Meeting" fixed>
+                      <input className="i" readOnly value={meeting.code} />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                <Field label="Who should answer" hint="Can be left open and nominated later.">
+                  <OfficerPicker
+                    people={people}
+                    selected={responder}
+                    onChange={setResponder}
+                    multiple={false}
+                    projectId={projectId}
+                  />
+                </Field>
+              )}
+
+              <Field label="Remarks">
+                <input
+                  className="i"
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Targets, conditions, anything the chair specified"
+                />
+              </Field>
+
+              <p className="m-0 rounded-[10px] border border-[#DCD2F0] bg-[#F5F1FE] px-3.5 py-3 text-[12.5px] text-[#4B3388]">
+                {type === 'ACTION' ? (
+                  <>
+                    All the selected responsible officers see this on their dashboard, all of them
+                    get the reminders, and <b>any one of them can report it complete</b> —
+                    completion then goes for confirmation.
+                  </>
+                ) : (
+                  <>
+                    A clarification has <b>no owners, no due date and no priority</b>. It is a
+                    question: somebody answers it, and whoever raised it closes it.
+                  </>
+                )}
+              </p>
+
+              <p className="m-0 text-[11.5px] text-muted">
+                Nothing recorded here is live yet. Entries stay inert until the signed MoM is
+                circulated — that is the moment the officers are actually told.
+              </p>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   );
 }

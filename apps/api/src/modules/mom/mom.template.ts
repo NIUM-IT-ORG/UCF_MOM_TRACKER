@@ -80,7 +80,45 @@ export interface MomDocumentData {
     status: ClarificationStatus | null;
     remarks: string | null;
   }[];
-  signatories: { name: string; designationName: string; role: string }[];
+  /**
+   * Documents attached while the minutes were being recorded.
+   *
+   * They are named on the document rather than merely travelling with it: a
+   * minute that refers to "the revised estimate" without recording which file
+   * that was is unusable a year later, when the file is one of nine in a
+   * folder.
+   */
+  annexures: { name: string; fileName: string; typeLabel: string; addedByName: string | null }[];
+  /**
+   * Who signs, and whether they have.
+   *
+   * One officer — the one the Project Coordinator routed it to. Before
+   * signature the block prints their name over a rule, so the document says
+   * whom it is waiting for. After signature the rule is replaced by a tick,
+   * the name, the designation and the moment it was signed.
+   */
+  signatory: {
+    name: string;
+    designationName: string;
+    signedAt: Date | null;
+  } | null;
+  /**
+   * The state emblem, already inlined as a data: URI.
+   *
+   * A file path or an http URL would not survive being printed, e-mailed or
+   * archived — the document has to carry its own crest. Absent is a legal
+   * state: the header simply prints without it rather than showing a broken
+   * image on a minute that goes on the record.
+   */
+  emblemDataUri: string | null;
+  /**
+   * The CDMA roundel, opposite the state emblem.
+   *
+   * Independent of the emblem on purpose: an office that has one file and not
+   * the other still gets a balanced masthead, rather than one crest shoved
+   * against the titles.
+   */
+  cdmaDataUri: string | null;
   generatedAt: Date;
 }
 
@@ -103,25 +141,37 @@ export function renderMomDocument(data: MomDocumentData): string {
 <body class="${signed ? 'signed' : 'draft'}">
 ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}</span></div>` : ''}
 <main class="sheet">
+<div class="inner">
 
-  <header class="head">
-    <div class="crest" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="1.7"
-           stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="4" width="18" height="17" rx="2.5" /><path d="M3 9h18M8 2v4M16 2v4" />
-        <path d="m9 14 2 2 4-4" />
-      </svg>
-    </div>
+  <header class="head${data.emblemDataUri || data.cdmaDataUri ? ' crested' : ''}">
+    ${
+      /*
+       * The state emblem left, the CDMA roundel right, the wording between
+       * them — a government letterhead.
+       *
+       * Either side falls back to an empty column of the same width when its
+       * file is missing, so the titles stay optically centred whether the
+       * office has both crests, one, or neither. A missing file prints nothing
+       * rather than a placeholder: this document goes on the record.
+       */
+      data.emblemDataUri
+        ? `<img class="emblem" src="${data.emblemDataUri}" alt="Government of Telangana" />`
+        : data.cdmaDataUri
+          ? '<div class="spacer" aria-hidden="true"></div>'
+          : ''
+    }
     <div class="titles">
-      <p class="dept">Government of the State · Municipal Administration Department</p>
-      <h1>Urban Challenge Fund</h1>
-      <p class="kind">Minutes of Meeting</p>
+      <p class="govt">Government of Telangana</p>
+      <p class="dept">Municipal Administration Department</p>
+      <h1>Minutes of Meeting</h1>
     </div>
-    <dl class="ref">
-      <dt>Ref</dt><dd class="mono">${esc(meeting.code)}</dd>
-      <dt>Version</dt><dd>v${mom.version}</dd>
-      <dt>Dated</dt><dd>${longDate(meeting.meetingDate)}</dd>
-    </dl>
+    ${
+      data.cdmaDataUri
+        ? `<img class="emblem cdma" src="${data.cdmaDataUri}" alt="Commissioner &amp; Director of Municipal Administration" />`
+        : data.emblemDataUri
+          ? '<div class="spacer" aria-hidden="true"></div>'
+          : ''
+    }
   </header>
 
   <table class="facts">
@@ -274,26 +324,66 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
   </table>`
   }
 
-  <h2>7. Circulation and next review</h2>
+  ${
+    data.annexures.length === 0
+      ? ''
+      : `<h2>7. Annexures</h2>
+  <table class="grid">
+    <thead><tr><th>No.</th><th>Document</th><th>Type</th><th>File</th><th>Placed by</th></tr></thead>
+    <tbody>
+      ${data.annexures
+        .map(
+          (a, n) => `<tr>
+            <td class="mono"><b>A-${String(n + 1).padStart(2, '0')}</b></td>
+            <td>${esc(a.name)}</td>
+            <td>${esc(a.typeLabel)}</td>
+            <td class="mono">${esc(a.fileName)}</td>
+            <td>${esc(a.addedByName ?? '—')}</td>
+          </tr>`,
+        )
+        .join('')}
+    </tbody>
+  </table>
+  <p class="note">The annexures listed above are circulated with these minutes.</p>
+`
+  }
+
+  <h2>${data.annexures.length === 0 ? 7 : 8}. Circulation and next review</h2>
   <p>These minutes are circulated to all invitees listed at section 1 and to the standing
   head-office recipients. Open items are carried forward to the next review for the project named
   above.</p>
 
-  <div class="signatures">
-    ${data.signatories
-      .map(
-        (s) => `<div class="sig">
-          <div class="rule"></div>
-          <b>${esc(s.name)}</b>
-          <span>${esc(s.designationName)}</span>
-          ${
-            // "Meeting Coordinator / Meeting Coordinator" is not a second fact.
-            s.role === s.designationName ? '' : `<span>${esc(s.role)}</span>`
-          }
-        </div>`,
-      )
-      .join('')}
-  </div>
+  ${
+    /*
+     * One block, hard right, as a government order is signed. The coordinator
+     * produced the document and the Project Coordinator approved it; neither
+     * signs it, and a second block invites the reader to think otherwise.
+     * Both names are on the record anyway, in the history and the audit trail.
+     *
+     * Signed in the system, so the tick is the signature. It carries the name,
+     * the designation and the exact moment — which is more than a scanned
+     * squiggle proves, because none of it can be backdated.
+     */
+    !data.signatory
+      ? ''
+      : data.signatory.signedAt
+        ? `<div class="signatures">
+          <div class="sig signed">
+            <div class="tick" aria-hidden="true">${TICK_SVG}</div>
+            <b>${esc(data.signatory.name)}</b>
+            <span>${esc(data.signatory.designationName)}</span>
+            <span class="stamp">Signed ${esc(stamp(data.signatory.signedAt))}</span>
+          </div>
+        </div>`
+        : `<div class="signatures">
+          <div class="sig">
+            <div class="rule"></div>
+            <b>${esc(data.signatory.name)}</b>
+            <span>${esc(data.signatory.designationName)}</span>
+            <span>For signature</span>
+          </div>
+        </div>`
+  }
 
   <footer class="foot">
     <span>${esc(meeting.code)} · ${esc(meeting.title)}</span>
@@ -303,6 +393,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
         : `System-generated draft · not valid until signed · generated ${shortDate(data.generatedAt)}`
     }</span>
   </footer>
+</div>
 </main>
 </body>
 </html>`;
@@ -316,27 +407,50 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
 const STYLE = `
 :root { --ink:#1B2433; --navy:#13233D; --muted:#5A6B82; --line:#D7DEE8; --accent:#C2703A; }
 * { box-sizing: border-box; }
+
+/*
+ * Times New Roman, because that is what government correspondence in India is
+ * set in — every order, proceeding and minute that crosses a desk in this
+ * department. Liberation Serif is the metric-compatible substitute on Linux
+ * servers, and Nirmala UI carries Telugu if a name or a place is written in
+ * it. Changing this one stack changes the whole document.
+ */
 body { margin:0; background:#EEF2F7; color:var(--ink);
-  font:13px/1.55 "Public Sans","Segoe UI",system-ui,sans-serif; }
-.sheet { position:relative; width:794px; min-height:1123px; margin:24px auto; padding:56px 54px 40px;
-  background:#fff; box-shadow:0 4px 22px rgba(19,35,61,.13); }
+  font:13.5px/1.5 "Times New Roman","Liberation Serif","Nirmala UI",Georgia,serif; }
+
+/*
+ * The page border. Government stationery is ruled, and a minute without one
+ * does not look like a record — a double rule, the outer heavier, inset far
+ * enough that no printer's unprintable margin clips it.
+ */
+.sheet { position:relative; width:794px; min-height:1123px; margin:24px auto; padding:34px;
+  background:#fff; box-shadow:0 4px 22px rgba(19,35,61,.13);
+  border:2.4px solid var(--navy); }
+.sheet::before { content:""; position:absolute; inset:5px; border:0.8px solid var(--navy);
+  pointer-events:none; }
+.inner { position:relative; padding:22px 24px 16px; }
 .watermark { position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; z-index:5; }
 .watermark span { font:800 118px/1 "Bitter",Georgia,serif; letter-spacing:.14em; color:#C3372B;
   opacity:.085; transform:rotate(-24deg); border:9px solid currentColor; border-radius:26px;
   padding:18px 44px; }
 
-.head { display:grid; grid-template-columns:auto 1fr auto; gap:18px; align-items:start;
-  padding-bottom:14px; border-bottom:2.5px solid var(--navy); }
-.crest { width:52px; height:52px; border-radius:12px; background:var(--navy); display:grid; place-items:center; }
+/* The crest to the left of the titles, as the client's own stationery has it.
+   The empty column on the right is the same width, so the titles read as
+   centred on the page rather than shunted off to one side. */
+.head { text-align:center; padding-bottom:12px; border-bottom:2.2px solid var(--navy); }
+.head.crested { display:grid; grid-template-columns:104px 1fr 104px; gap:14px; align-items:center; }
+.emblem { display:block; height:100px; width:auto; margin:0 auto 0 0; }
+/* The CDMA roundel is a filled circle and the state emblem a fine outline, so
+   matched pixel heights read as mismatched weights. A touch smaller, and
+   pushed to its own edge. */
+.emblem.cdma { height:88px; margin:0 0 0 auto; }
 .titles { text-align:center; }
-.dept { margin:0; font-size:9.5px; font-weight:800; letter-spacing:2.1px; text-transform:uppercase; color:var(--muted); }
-.titles h1 { margin:4px 0 2px; font:700 21px/1.2 "Bitter",Georgia,serif; color:var(--navy); }
-.kind { margin:0; font-size:10px; font-weight:800; letter-spacing:2.6px; text-transform:uppercase; color:var(--accent); }
-.ref { display:grid; grid-template-columns:1fr; gap:1px; margin:0; text-align:right; }
-.ref dt { font-size:8.5px; text-transform:uppercase; letter-spacing:.9px; color:var(--muted); }
-.ref dd { margin:0 0 5px; font-size:11.5px; font-weight:700; color:var(--navy); }
+.govt { margin:0; font-size:15px; font-weight:700; letter-spacing:1.2px; color:var(--navy); }
+.dept { margin:2px 0 0; font-size:12.5px; font-weight:700; letter-spacing:.7px; color:var(--ink); }
+.titles h1 { margin:7px 0 2px; font:700 20px/1.2 "Times New Roman","Liberation Serif",Georgia,serif;
+  color:var(--navy); }
 
-h2 { margin:22px 0 8px; font:700 13px/1.3 "Bitter",Georgia,serif; color:var(--navy);
+h2 { margin:20px 0 8px; font:700 14px/1.3 "Times New Roman","Liberation Serif",Georgia,serif; color:var(--navy);
   padding-bottom:5px; border-bottom:1px solid var(--line); }
 p { margin:0 0 9px; }
 .lede { color:var(--muted); }
@@ -368,11 +482,18 @@ table { width:100%; border-collapse:collapse; margin:8px 0 4px; }
 .tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
   color:var(--accent); }
 
-.signatures { display:flex; gap:60px; justify-content:space-around; margin:56px 0 0; text-align:center; }
-.sig { flex:1; max-width:240px; display:flex; flex-direction:column; gap:1px; }
+/* One block, hard right — where a signature goes on an order. */
+.signatures { display:flex; justify-content:flex-end; margin:64px 0 0; text-align:center; }
+.sig { width:260px; display:flex; flex-direction:column; gap:1px; }
 .sig .rule { border-top:1px solid var(--ink); margin-bottom:7px; }
 .sig b { font-size:12.5px; color:var(--navy); }
 .sig span { font-size:11px; color:var(--muted); }
+
+/* Signed in the system: the tick replaces the rule, and the block is boxed so
+   that it reads as an attestation rather than as a place to write. */
+.sig.signed { border:1px solid #BFE0CC; border-radius:6px; background:#F3FAF5; padding:11px 14px 12px; }
+.sig.signed .tick { display:flex; justify-content:center; margin-bottom:5px; }
+.sig.signed .stamp { margin-top:3px; font-size:10px; color:#1B7F44; font-weight:700; }
 
 .foot { display:flex; justify-content:space-between; gap:18px; margin-top:34px; padding-top:9px;
   border-top:1px solid var(--line); font-size:9.5px; letter-spacing:.3px; color:var(--muted); }
@@ -384,6 +505,7 @@ table { width:100%; border-collapse:collapse; margin:8px 0 4px; }
   .watermark { position:fixed; }
   h2, .grid thead { break-after:avoid; }
   .grid tr, .sig { break-inside:avoid; }
+  .sheet { box-shadow:none; margin:0; border-width:2px; }
 }
 `;
 
@@ -404,3 +526,33 @@ function shortDate(d: Date): string {
 function longDate(d: Date): string {
   return shortDate(d);
 }
+
+/**
+ * The moment a MoM was signed, in the timezone the officers work in.
+ *
+ * Everything else on this document is a date, so UTC does no harm. A signature
+ * timestamp is different: it is evidence, it gets quoted, and "16 Sep 2026,
+ * 11:42 pm" for something signed at 5:12 am on the 17th in Hyderabad is the
+ * sort of discrepancy that ends up in a note on a file. So this one is printed
+ * in IST and says so.
+ */
+function stamp(d: Date): string {
+  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  const hh = String(ist.getUTCHours()).padStart(2, '0');
+  const mm = String(ist.getUTCMinutes()).padStart(2, '0');
+  return `${shortDate(ist)} at ${hh}:${mm} IST`;
+}
+
+/**
+ * The tick, drawn rather than typed.
+ *
+ * A "✓" renders as whatever glyph the reader's font happens to carry, and in
+ * Times New Roman on a Windows machine that is frequently a hollow box. This
+ * document is printed and filed, so the mark is an inline SVG path: identical
+ * on every machine, and it survives being saved as a PDF.
+ */
+const TICK_SVG =
+  '<svg viewBox="0 0 24 24" width="26" height="26" role="img" aria-label="Signed">' +
+  '<circle cx="12" cy="12" r="11" fill="#1B7F44"/>' +
+  '<path d="M6.8 12.4l3.4 3.4 7-7.2" fill="none" stroke="#fff" stroke-width="2.4" ' +
+  'stroke-linecap="round" stroke-linejoin="round"/></svg>';

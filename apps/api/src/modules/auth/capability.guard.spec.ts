@@ -27,6 +27,7 @@ const asDesignation = (code: keyof typeof SEED_DESIGNATION_CAPS): AuthUser => ({
   name: code,
   email: `${code}@example.gov`.toLowerCase(),
   designationCode: code,
+  designationName: code,
   caps: SEED_DESIGNATION_CAPS[code] ?? [],
   projectIds: ['P1'],
   seesAllProjects: false,
@@ -38,14 +39,30 @@ describe('CapabilityGuard', () => {
     expect(guard.canActivate(ctx)).toBe(true);
   });
 
+  const guard_ = ({ guard, ctx }: ReturnType<typeof contextFor>) => guard.canActivate(ctx);
+
   it('refuses a signed-out caller', () => {
     const { guard, ctx } = contextFor('approve_mom', undefined);
     expect(() => guard.canActivate(ctx)).toThrowError(AppError);
   });
 
   it('allows a designation that holds the capability', () => {
-    const { guard, ctx } = contextFor('approve_mom', asDesignation('MD'));
+    // The Project Coordinator approves. This used to be the Mission Director,
+    // and the change is the point of the chain: whoever validates the document
+    // is not whoever signs it.
+    const { guard, ctx } = contextFor('approve_mom', asDesignation('PD'));
     expect(guard.canActivate(ctx)).toBe(true);
+  });
+
+  it('keeps approving and signing in different hands', () => {
+    // If either of these ever passes, the routing step has become advisory.
+    expect(() => guard_(contextFor('approve_mom', asDesignation('MD')))).toThrowError(AppError);
+    expect(() => guard_(contextFor('approve_mom', asDesignation('AMD')))).toThrowError(AppError);
+    expect(() => guard_(contextFor('sign_mom', asDesignation('PD')))).toThrowError(AppError);
+
+    // And that each office holds the one it should.
+    expect(guard_(contextFor('sign_mom', asDesignation('MD')))).toBe(true);
+    expect(guard_(contextFor('sign_mom', asDesignation('AMD')))).toBe(true);
   });
 
   it('denies one that does not, and names the missing key', () => {

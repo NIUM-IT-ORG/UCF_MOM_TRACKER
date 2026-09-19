@@ -308,12 +308,15 @@ export function ItemStatusChip({
 export function Field({
   label,
   required,
+  /** A value that cannot be changed here — neither required nor optional. */
+  fixed,
   error,
   hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  fixed?: boolean;
   error?: string | null;
   hint?: React.ReactNode;
   children: React.ReactNode;
@@ -322,7 +325,11 @@ export function Field({
     <label className="block">
       <span className="mb-1.5 block text-[11.5px] font-bold text-navy">
         {label}
-        {required ? <span className="text-danger"> *</span> : <span className="font-normal text-muted"> optional</span>}
+        {fixed ? null : required ? (
+          <span className="text-danger"> *</span>
+        ) : (
+          <span className="font-normal text-muted"> optional</span>
+        )}
       </span>
       {children}
       {hint && !error && <span className="mt-1 block text-[11px] text-muted">{hint}</span>}

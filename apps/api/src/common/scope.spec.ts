@@ -15,6 +15,7 @@ const coordinator: AuthUser = {
   name: 'Officer D',
   email: 'officer.d@example.gov',
   designationCode: 'MC',
+  designationName: 'Meeting Coordinator',
   caps: ['plan_instant', 'record_minutes', 'share_object'],
   projectIds: ['P1'],
   seesAllProjects: false,
@@ -25,7 +26,8 @@ const director: AuthUser = {
   name: 'Officer A',
   email: 'officer.a@example.gov',
   designationCode: 'MD',
-  caps: ['approve_mom', 'view_all_projects', 'share_object'],
+  designationName: 'Mission Director',
+  caps: ['sign_mom', 'view_all_projects', 'share_object'],
   projectIds: [],
   seesAllProjects: true,
 };

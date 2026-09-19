@@ -7,6 +7,8 @@ import { useSession } from '@/lib/session';
 import { formatDate } from '@/lib/format';
 import type { MomHistoryRow, MomRow } from '@/lib/meetings';
 import { Card, Field, MomChip, Notice } from '@/components/ui';
+import { MomPreview } from '@/components/MomPreview';
+import { WhoCan } from '@/components/WhoCan';
 
 /**
  * The approval console.
@@ -16,12 +18,21 @@ import { Card, Field, MomChip, Notice } from '@/components/ui';
  * reject and optional on approve — which is the asymmetry the client asked for:
  * saying yes needs no explanation, saying no always does.
  */
+interface Signatory {
+  id: string;
+  name: string;
+  initials: string;
+  designation: { code: string; name: string };
+}
+
 export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void }) {
-  const { caps } = useSession();
+  const { user, caps } = useSession();
   const [history, setHistory] = useState<MomHistoryRow[]>([]);
-  const [asking, setAsking] = useState<'return' | 'reject' | 'sign' | null>(null);
+  const [asking, setAsking] = useState<'return' | 'reject' | 'approve' | 'sign' | null>(null);
   const [remark, setRemark] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [signatories, setSignatories] = useState<Signatory[]>([]);
+  const [signatoryId, setSignatoryId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -31,6 +42,21 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
       .then(setHistory)
       .catch(() => setHistory([]));
   }, [mom.meeting.id, mom.state, mom.version]);
+
+  // Who this can be routed to. Loaded when the approval panel opens rather
+  // than on every render of every row in the register.
+  useEffect(() => {
+    if (asking !== 'approve') return;
+    api<Signatory[]>(`/meetings/${mom.meeting.id}/mom/signatories`)
+      .then((rows) => {
+        setSignatories(rows);
+        // Deliberately not preselected. Choosing who signs a government
+        // minute is the decision being asked for; a default turns it into a
+        // click-through.
+        setSignatoryId('');
+      })
+      .catch(() => setSignatories([]));
+  }, [asking, mom.meeting.id]);
 
   async function act(label: string, path: string, body?: unknown) {
     setBusy(label);
@@ -50,39 +76,49 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
     }
   }
 
-  /** Signing is the three-step upload, then the transition that circulates. */
+  /**
+   * Signing.
+   *
+   * The signature is the act, recorded against the officer's name with the
+   * moment it was made. A wet-signed scan is optional and only for the
+   * physical file — if one is chosen it is uploaded first and filed alongside,
+   * but nothing waits on it.
+   */
   async function signAndCirculate() {
-    if (!file) return;
     setBusy('sign');
     setError(null);
     try {
-      const { fileId, uploadUrl } = await api<{ fileId: string; uploadUrl: string }>('/files', {
-        method: 'POST',
-        body: JSON.stringify({
-          fileName: file.name,
-          mimeType: file.type || 'application/pdf',
-          sizeBytes: file.size,
-        }),
-      });
-      const put = await fetch(uploadUrl, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'content-type': file.type || 'application/pdf' },
-        body: file,
-      });
-      if (!put.ok) {
-        const b = (await put.json().catch(() => null)) as { error?: { message?: string } } | null;
-        throw new ApiError('INTERNAL', b?.error?.message ?? 'The upload failed.', put.status);
+      let fileId: string | undefined;
+      if (file) {
+        const reserved = await api<{ fileId: string; uploadUrl: string }>('/files', {
+          method: 'POST',
+          body: JSON.stringify({
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+            sizeBytes: file.size,
+          }),
+        });
+        const put = await fetch(reserved.uploadUrl, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'content-type': file.type || 'application/pdf' },
+          body: file,
+        });
+        if (!put.ok) {
+          const b = (await put.json().catch(() => null)) as { error?: { message?: string } } | null;
+          throw new ApiError('INTERNAL', b?.error?.message ?? 'The upload failed.', put.status);
+        }
+        fileId = reserved.fileId;
       }
       await api(`/meetings/${mom.meeting.id}/mom/sign`, {
         method: 'POST',
-        body: JSON.stringify({ fileId }),
+        body: JSON.stringify(fileId ? { fileId } : {}),
       });
       setAsking(null);
       setFile(null);
       onDone();
     } catch (err) {
-      setError(err instanceof ApiError ? err.display : 'Could not circulate the MoM.');
+      setError(err instanceof ApiError ? err.display : 'Could not sign the MoM.');
     } finally {
       setBusy(null);
     }
@@ -90,7 +126,13 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
 
   const canMinute = caps.includes('record_minutes');
   const canApprove = caps.includes('approve_mom');
-  const canSign = caps.includes('upload_signed');
+  /*
+   * Holding `sign_mom` is not enough, and the screen has to say so. This MoM
+   * was routed to one officer; showing a Sign button to the other one and
+   * letting the server refuse it is how people conclude the system is broken.
+   */
+  const holdsSigning = caps.includes('sign_mom');
+  const isMySignature = Boolean(mom.signatoryId && user?.id === mom.signatoryId);
 
   return (
     <Card title={`${mom.meeting.code} · ${mom.meeting.title}`} tag={`Version ${mom.version}`}>
@@ -108,9 +150,17 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
           >
             open the document
           </a>
+          <a
+            className="text-[12px] font-semibold"
+            href={`/api/v1/meetings/${mom.meeting.id}/mom.pdf`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            PDF with annexures
+          </a>
           {mom.signedFileId && (
             <a className="text-[12px]" href={`/api/v1/files/${mom.signedFileId}/content`}>
-              signed scan
+              wet-signed scan
             </a>
           )}
         </div>
@@ -125,9 +175,15 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
 
         {mom.state === 'SIGNED' && (
           <Notice tone="green">
-            <b>Circulated {formatDate(mom.circulatedAt)}.</b> Every action and clarification in this
-            document is now live, and the officers named have been told. This MoM cannot be changed —
-            a correction is issued as a corrigendum.
+            <b>
+              Signed
+              {mom.signedBy
+                ? ` by ${mom.signedBy.name}, ${mom.signedBy.designation.name},`
+                : ''}{' '}
+              and circulated {formatDate(mom.circulatedAt)}.
+            </b>{' '}
+            Every action and clarification in this document is now live, and the officers named have
+            been told. This MoM cannot be changed — a correction is issued as a corrigendum.
           </Notice>
         )}
 
@@ -164,9 +220,9 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
                   className="btn-primary"
                   type="button"
                   disabled={busy !== null}
-                  onClick={() => void act('approve', 'approve', { remark: remark.trim() })}
+                  onClick={() => setAsking('approve')}
                 >
-                  {busy === 'approve' ? 'Approving…' : 'Approve'}
+                  Approve &amp; send for signature
                 </button>
                 <button className="btn-ghost" type="button" onClick={() => setAsking('return')}>
                   Return for changes
@@ -177,26 +233,33 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               </>
             )}
             {mom.state === 'SUBMITTED' && !canApprove && (
-              <WaitingOn
+              <WhoCan
                 capability="approve_mom"
-                lead="With the approver."
-                who="Approving it is their step"
+                lead="With the Project Coordinator for validation."
+                who="Approving it and choosing who signs is their step"
               />
             )}
-            {mom.state === 'APPROVED' && canSign && (
+            {mom.state === 'APPROVED' && isMySignature && (
               <button className="btn-primary" type="button" onClick={() => setAsking('sign')}>
-                Upload the signed copy &amp; circulate
+                Sign &amp; circulate
               </button>
             )}
-            {mom.state === 'APPROVED' && !canSign && (
-              <WaitingOn
-                capability="upload_signed"
-                lead="Approved. It goes live when the signed copy is uploaded and it is circulated."
-                who="That is the coordinator's step"
-              />
+            {mom.state === 'APPROVED' && !isMySignature && (
+              <Notice tone="amber">
+                <b>
+                  Approved, and with{' '}
+                  {mom.signatory
+                    ? `${mom.signatory.name}, ${mom.signatory.designation.name},`
+                    : 'the nominated officer'}{' '}
+                  for signature.
+                </b>{' '}
+                {holdsSigning
+                  ? 'It was routed to a different officer, so only they can sign it. Ask the Project Coordinator to return and re-route it if that is wrong.'
+                  : 'It goes live the moment they sign — nothing is waiting on you.'}
+              </Notice>
             )}
             {mom.state === 'DRAFT' && !canMinute && (
-              <WaitingOn
+              <WhoCan
                 capability="record_minutes"
                 lead="A draft, not yet with the approver."
                 who="Submitting it is the coordinator's step"
@@ -246,6 +309,66 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
           </div>
         )}
 
+        {asking === 'approve' && (
+          <div className="grid gap-3">
+            <Notice>
+              Approving does two things: it accepts the minutes as correct, and it sends the
+              document to one officer for signature. Nobody else will be able to sign it.
+            </Notice>
+            <Field
+              label="Send for signature to"
+              required
+              hint="The Additional Mission Director or the Mission Director for this project."
+            >
+              {signatories.length === 0 ? (
+                <p className="m-0 text-[12.5px] text-muted">
+                  No officer mapped to this project holds the authority to sign. Ask the System
+                  Administrator to map an Additional Mission Director or a Mission Director.
+                </p>
+              ) : (
+                <select
+                  className="i"
+                  value={signatoryId}
+                  onChange={(e) => setSignatoryId(e.target.value)}
+                >
+                  <option value="">Choose an officer…</option>
+                  {signatories.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {s.designation.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <Field label="Remark" hint="Optional on approval. Saying yes needs no explanation.">
+              <textarea
+                className="i min-h=[64px] min-h-[64px]"
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                placeholder="Checked against the attendance and the agenda."
+              />
+            </Field>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={busy !== null || !signatoryId}
+                onClick={() =>
+                  void act('approve', 'approve', {
+                    signatoryId,
+                    ...(remark.trim() ? { remark: remark.trim() } : {}),
+                  })
+                }
+              >
+                {busy === 'approve' ? 'Approving…' : 'Approve & send for signature'}
+              </button>
+              <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
+                Never mind
+              </button>
+            </div>
+          </div>
+        )}
+
         {asking === 'sign' && (
           <div className="grid gap-3">
             <Notice tone="amber">
@@ -253,7 +376,18 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               and clarification in the document live, tells the officers named on them, and closes
               the meeting. After this the MoM is immutable.
             </Notice>
-            <Field label="The signed scan" required hint="A PDF of the signed copy.">
+            <p className="m-0 rounded-[10px] border border-line bg-[#F9FBFD] px-3.5 py-3 text-[12.5px] text-ink">
+              Signing records your name, your designation and this moment on the document, beside a
+              green tick. You are signing as{' '}
+              <b className="text-navy">
+                {user?.name}, {user?.designation?.name}
+              </b>
+              .
+            </p>
+            <Field
+              label="Signed scan"
+              hint="Optional. Only if a wet-signed copy is being kept in the physical file — the signature above is what circulates."
+            >
               <div className="rounded-xl border-[1.5px] border-dashed border-[#B9C6D6] bg-[#F9FBFD] p-5 text-center">
                 <input
                   ref={fileInput}
@@ -263,10 +397,10 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
                 <button type="button" className="btn-ghost" onClick={() => fileInput.current?.click()}>
-                  Choose the PDF
+                  Choose a PDF
                 </button>
                 <div className="mt-2 text-[12.5px] text-muted">
-                  {file ? <b className="text-navy">{file.name}</b> : 'PDF only, up to 25 MB.'}
+                  {file ? <b className="text-navy">{file.name}</b> : 'Not required. PDF, up to 25 MB.'}
                 </div>
               </div>
             </Field>
@@ -274,10 +408,10 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               <button
                 className="btn-primary"
                 type="button"
-                disabled={busy !== null || !file}
+                disabled={busy !== null}
                 onClick={() => void signAndCirculate()}
               >
-                {busy === 'sign' ? 'Circulating…' : 'Circulate — this makes the items live'}
+                {busy === 'sign' ? 'Signing…' : 'Sign & circulate — this makes the items live'}
               </button>
               <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
                 Never mind
@@ -285,6 +419,11 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
             </div>
           </div>
         )}
+
+        <MomPreview
+          meetingId={mom.meeting.id}
+          label={`The document · ${mom.meeting.code} v${mom.version}`}
+        />
 
         {history.length > 0 && (
           <div className="mt-4 border-t border-line pt-3.5">
@@ -306,59 +445,5 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
         )}
       </div>
     </Card>
-  );
-}
-
-/**
- * Says who can take the next step, by name.
- *
- * "You do not have that capability" leaves an officer with nothing to do but
- * ask around. Both halves of a hand-off matter: that it is not yours, and
- * whose it is. The names come from the designation matrix, so they stay right
- * when the matrix changes, and the list is already scoped to officers this
- * viewer is allowed to see.
- */
-function WaitingOn({
-  capability,
-  lead,
-  who,
-}: {
-  capability: string;
-  lead: string;
-  who: string;
-}) {
-  const [names, setNames] = useState<string[] | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    Promise.all([
-      api<{ code: string; caps: string[] }[]>('/designations'),
-      api<{ name: string; accountState: string; designation: { code: string } }[]>('/users'),
-    ])
-      .then(([designations, users]) => {
-        const holders = new Set(
-          designations.filter((d) => d.caps.includes(capability)).map((d) => d.code),
-        );
-        const found = users
-          .filter((u) => u.accountState === 'ACTIVE' && holders.has(u.designation.code))
-          .map((u) => `${u.name} (${u.designation.code})`);
-        if (alive) setNames(found);
-      })
-      // Not being able to name them does not make the sentence wrong.
-      .catch(() => alive && setNames([]));
-    return () => {
-      alive = false;
-    };
-  }, [capability]);
-
-  return (
-    <span className="text-[12px] text-muted">
-      {lead} {who}
-      {names === null
-        ? '.'
-        : names.length === 0
-          ? '.'
-          : `: ${names.slice(0, 4).join(', ')}${names.length > 4 ? ', and others' : ''}.`}
-    </span>
   );
 }

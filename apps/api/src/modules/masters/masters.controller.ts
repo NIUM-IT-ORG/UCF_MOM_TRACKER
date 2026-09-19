@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
 import { MastersService } from './masters.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
@@ -17,6 +17,27 @@ const createUser = z
     departmentId: z.string().min(1),
     seesAllProjects: z.boolean().optional(),
     password: z.string().min(12).optional(),
+  })
+  .strict();
+
+const updateUser = z
+  .object({
+    name: z.string().trim().min(2).optional(),
+    initials: z.string().trim().min(1).max(3).optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    mobile: z.string().trim().min(8).optional(),
+    designationCode: z.string().trim().min(2).optional(),
+    departmentId: z.string().min(1).optional(),
+    seesAllProjects: z.boolean().optional(),
+  })
+  .strict();
+
+const designationBody = z
+  .object({
+    code: z.string().trim().toUpperCase().min(2).max(12).optional(),
+    name: z.string().trim().min(2),
+    band: z.string().trim().min(2),
+    caps: z.array(z.string().trim().min(2)),
   })
   .strict();
 
@@ -55,6 +76,13 @@ export class MastersController {
     return this.masters.createUser(createUser.parse(body));
   }
 
+  @Patch('users/:id')
+  @RequireCapability('manage_masters')
+  @Audited({ objectType: 'USER', event: 'USER_UPDATED' })
+  updateUser(@Param('id') id: string, @Body() body: unknown) {
+    return this.masters.updateUser(id, updateUser.parse(body));
+  }
+
   @Put('users/:id/projects')
   @RequireCapability('manage_masters')
   @Audited({ objectType: 'USER', event: 'USER_PROJECTS_CHANGED' })
@@ -72,6 +100,27 @@ export class MastersController {
   @Get('designations')
   listDesignations() {
     return this.masters.listDesignations();
+  }
+
+  @Post('designations')
+  @RequireCapability('manage_masters')
+  @Audited({ objectType: 'DESIGNATION', event: 'DESIGNATION_CREATED' })
+  createDesignation(@Body() body: unknown) {
+    return this.masters.createDesignation(designationBody.parse(body));
+  }
+
+  @Patch('designations/:id')
+  @RequireCapability('manage_masters')
+  @Audited({ objectType: 'DESIGNATION', event: 'DESIGNATION_UPDATED' })
+  updateDesignation(@Param('id') id: string, @Body() body: unknown) {
+    return this.masters.updateDesignation(id, designationBody.parse(body));
+  }
+
+  @Post('designations/:id/retire')
+  @RequireCapability('manage_masters')
+  @Audited({ objectType: 'DESIGNATION', event: 'DESIGNATION_RETIRED' })
+  retireDesignation(@Param('id') id: string) {
+    return this.masters.retireDesignation(id);
   }
 
   @Get('departments')

@@ -12,6 +12,8 @@ export interface AuthUser {
   name: string;
   email: string;
   designationCode: string;
+  /** The title as it is printed on a document — "Mission Director", not "MD". */
+  designationName: string;
   caps: string[];
   projectIds: string[];
   seesAllProjects: boolean;

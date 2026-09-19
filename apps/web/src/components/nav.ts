@@ -52,6 +52,7 @@ export const NAV: NavGroup[] = [
   {
     group: 'System',
     items: [
+      { href: '/capabilities', label: 'Capabilities' },
       { href: '/access', label: 'Access control', cap: 'manage_access' },
       { href: '/communications', label: 'Communication log' },
       { href: '/audit', label: 'Audit trail' },

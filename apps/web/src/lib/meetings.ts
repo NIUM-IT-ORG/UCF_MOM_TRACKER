@@ -121,6 +121,12 @@ export interface MomRow {
   submittedAt: string | null;
   decidedAt: string | null;
   decisionRemark: string | null;
+  /** The officer the Project Coordinator routed it to. Only they may sign. */
+  signatoryId: string | null;
+  signedById: string | null;
+  signedAt: string | null;
+  signatory: { id: string; name: string; designation: { name: string } } | null;
+  signedBy: { id: string; name: string; designation: { name: string } } | null;
   circulatedAt: string | null;
   correctsMomId: string | null;
   meeting: {

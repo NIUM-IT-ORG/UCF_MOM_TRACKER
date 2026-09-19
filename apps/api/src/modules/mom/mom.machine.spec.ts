@@ -3,6 +3,7 @@ import type { MomState } from '@mom/shared';
 import {
   MOM_TRANSITIONS,
   advanceMom,
+  assertMaySign,
   assertMutable,
   minutesLockedIn,
   nextMomState,
@@ -125,5 +126,60 @@ describe('the full journey the demo walks', () => {
     state = advanceMom(state, 'sign');
     expect(state).toBe('SIGNED');
     expect(() => assertMutable(state)).toThrow();
+  });
+});
+
+describe('who may sign', () => {
+  /*
+   * The rule the whole chain rests on: the Project Coordinator nominates one
+   * executive at approval, and only that officer can sign. Holding `sign_mom`
+   * is necessary and never sufficient — otherwise the routing step would be
+   * advisory and the Mission Director could sign anything at any time, which
+   * is exactly the control the client asked for.
+   */
+  const routedToAmd = { signatoryId: 'u-amd', userId: 'u-amd', canSign: true };
+
+  it('lets the officer it was routed to sign', () => {
+    expect(() => assertMaySign('APPROVED', routedToAmd)).not.toThrow();
+  });
+
+  it('refuses another executive, even one who holds sign_mom', () => {
+    expect(() =>
+      assertMaySign('APPROVED', { signatoryId: 'u-amd', userId: 'u-md', canSign: true }),
+    ).toThrowError(/routed to a different officer/);
+  });
+
+  it('says so plainly rather than pretending the MoM is not there', () => {
+    // A 404 is right when the officer should not know the thing exists. Here
+    // they are looking straight at it, and "not found" would be a lie that
+    // generates a support call.
+    try {
+      assertMaySign('APPROVED', { signatoryId: 'u-amd', userId: 'u-md', canSign: true });
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect((err as { code: string }).code).toBe('NOT_YOUR_SIGNATURE');
+    }
+  });
+
+  it('refuses before approval, whoever is asking', () => {
+    for (const state of ['NOT_GENERATED', 'DRAFT', 'SUBMITTED', 'RETURNED'] as MomState[]) {
+      expect(() => assertMaySign(state, routedToAmd)).toThrowError(/Cannot move from/);
+    }
+  });
+
+  it('refuses to sign twice', () => {
+    expect(() => assertMaySign('SIGNED', routedToAmd)).toThrowError(/Cannot move from/);
+  });
+
+  it('explains a MoM approved before routing existed, rather than throwing a null', () => {
+    expect(() =>
+      assertMaySign('APPROVED', { signatoryId: null, userId: 'u-md', canSign: true }),
+    ).toThrowError(/without a signing officer being chosen/);
+  });
+
+  it('refuses a nominee whose designation has since lost the authority', () => {
+    expect(() =>
+      assertMaySign('APPROVED', { signatoryId: 'u-amd', userId: 'u-amd', canSign: false }),
+    ).toThrowError(/no longer carries the authority/);
   });
 });

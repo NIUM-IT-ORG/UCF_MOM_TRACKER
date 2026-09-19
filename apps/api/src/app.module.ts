@@ -11,6 +11,8 @@ import { FilesModule } from './modules/files/files.module.js';
 import { ProjectsModule } from './modules/projects/projects.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { MeetingsModule } from './modules/meetings/meetings.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
 import { ItemsModule } from './modules/items/items.module.js';
 import { MomModule } from './modules/mom/mom.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
@@ -35,6 +37,8 @@ import { AuditInterceptor } from './common/audit.interceptor.js';
     NotificationsModule,
     MeetingsModule,
     ItemsModule,
+    DashboardModule,
+    ReportsModule,
     MomModule,
   ],
   providers: [

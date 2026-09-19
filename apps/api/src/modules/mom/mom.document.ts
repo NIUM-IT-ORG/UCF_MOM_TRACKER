@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { MomState } from '@mom/shared';
+import { DOCUMENT_TYPE_LABEL, type MomState } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { renderMomDocument, type MomDocumentData } from './mom.template.js';
+import { cdmaLogo, emblem } from './mom.emblem.js';
 
 /**
  * Gathers everything the document needs, in one query, and hands it to the one
@@ -71,9 +72,26 @@ export class MomDocumentService {
         },
         minutes: { select: { bodyHtml: true } },
         moms: {
-          select: { state: true, version: true, circulatedAt: true },
+          select: {
+            state: true,
+            version: true,
+            circulatedAt: true,
+            signatoryId: true,
+            signedById: true,
+            signedAt: true,
+          },
           orderBy: { version: 'desc' },
           take: 1,
+        },
+        // Attached while the minutes were being recorded; listed as annexures.
+        documents: {
+          select: {
+            name: true,
+            type: true,
+            uploadedById: true,
+            file: { select: { fileName: true } },
+          },
+          orderBy: { createdAt: 'asc' },
         },
         items: {
           select: {
@@ -95,12 +113,22 @@ export class MomDocumentService {
     });
     if (!meeting) throw AppError.notFound('That meeting');
 
-    const mom = meeting.moms[0] ?? { state: 'NOT_GENERATED' as MomState, version: 0, circulatedAt: null };
+    const current = meeting.moms[0];
+    const mom = {
+      state: current?.state ?? ('NOT_GENERATED' as MomState),
+      version: current?.version ?? 0,
+      circulatedAt: current?.circulatedAt ?? null,
+    };
 
     // Agenda points name who raised them, and the project they belong to —
     // both need a lookup, so do it once rather than per row.
     const projectIds = [...new Set(meeting.agenda.map((a) => a.projectId).filter(Boolean))] as string[];
-    const addedByIds = [...new Set(meeting.agenda.map((a) => a.addedById))];
+    const addedByIds = [
+      ...new Set([
+        ...meeting.agenda.map((a) => a.addedById),
+        ...meeting.documents.map((d) => d.uploadedById),
+      ]),
+    ];
     const [projects, people] = await Promise.all([
       this.prisma.project.findMany({
         where: { id: { in: projectIds } },
@@ -173,7 +201,15 @@ export class MomDocumentService {
           status: i.clarificationStatus,
           remarks: i.remarks,
         })),
-      signatories: await this.signatories(meeting.chair?.id, meeting.createdById),
+      annexures: meeting.documents.map((d) => ({
+        name: d.name,
+        fileName: d.file.fileName,
+        typeLabel: DOCUMENT_TYPE_LABEL[d.type] ?? String(d.type),
+        addedByName: personName.get(d.uploadedById) ?? null,
+      })),
+      signatory: await this.signatory(current?.signedById ?? current?.signatoryId ?? null, current?.signedAt ?? null),
+      emblemDataUri: emblem(),
+      cdmaDataUri: cdmaLogo(),
       generatedAt: new Date(),
     };
 
@@ -181,26 +217,37 @@ export class MomDocumentService {
   }
 
   /**
-   * Who signs: the chairperson, and the coordinator who produced the document.
-   * Both, because the chair attests to what was decided and the coordinator to
-   * what was recorded — and the reference document shows two blocks.
+   * Who signs, and whether they have.
+   *
+   * Not the chairperson. Under the chain the client asked for, the Project
+   * Coordinator validates the minutes and nominates one executive — the
+   * Additional Mission Director or the Mission Director — and that officer
+   * signs. The chair presided; they did not put their name to the document.
+   *
+   * Before signature this still returns the nominee, so the draft says whom it
+   * is waiting for rather than showing an anonymous rule.
    */
-  private async signatories(chairId: string | undefined, createdById: string) {
-    const ids = [...new Set([chairId, createdById].filter((v): v is string => Boolean(v)))];
-    const people = await this.prisma.user.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, name: true, designation: { select: { name: true } } },
+  private async signatory(userId: string | null, signedAt: Date | null) {
+    if (!userId) return null;
+    const person = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, designation: { select: { name: true } } },
     });
-    const byId = new Map(people.map((p) => [p.id, p]));
-    const out: { name: string; designationName: string; role: string }[] = [];
-    if (chairId && byId.has(chairId)) {
-      const p = byId.get(chairId) as (typeof people)[number];
-      out.push({ name: p.name, designationName: p.designation.name, role: 'Chairperson' });
-    }
-    if (createdById !== chairId && byId.has(createdById)) {
-      const p = byId.get(createdById) as (typeof people)[number];
-      out.push({ name: p.name, designationName: p.designation.name, role: 'Meeting Coordinator' });
-    }
-    return out;
+    if (!person) return null;
+    return { name: person.name, designationName: person.designation.name, signedAt };
   }
 }
+
+/**
+ * The state emblem, read once and inlined.
+ *
+ * It lives outside the code because it is the client's asset, not ours: drop
+ * the official file at `var/branding/emblem.png` (or point MOM_EMBLEM_PATH
+ * somewhere else) and every document picks it up. Nothing is invented — if
+ * the file is not there the masthead prints without a crest, which is honest,
+ * where a placeholder emblem on a signed minute would not be.
+ *
+ * Cached after the first read: this is a file on disk that changes when
+ * somebody replaces it, not per request, and a restart is the natural moment
+ * to notice.
+ */

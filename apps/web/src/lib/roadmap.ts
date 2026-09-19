@@ -30,27 +30,6 @@ export const ROADMAP: Record<string, Planned> = {
     blurb:
       'Password plus an OTP, then a session whose capabilities are re-read from the database on every request — so an access change takes effect without anyone signing out.',
   },
-  '/calendar': {
-    phase: 6,
-    tickets: ['P6-02'],
-    title: 'Calendar',
-    blurb:
-      'Months you can step through, colour-coded conducted / upcoming / planning / instant, with the pipeline and recently-held lists beside it.',
-  },
-  '/register': {
-    phase: 6,
-    tickets: ['P6-03'],
-    title: 'Actions & clarifications',
-    blurb:
-      'Every commitment with its owners, due date, ageing and status, filterable and exportable. It counts only activated items — the ones whose MoM has actually been circulated.',
-  },
-  '/reports': {
-    phase: 6,
-    tickets: ['P6-04', 'P6-05'],
-    title: 'Reports',
-    blurb:
-      'Six reports — action taken, meeting register, pending approvals, officer performance, clarification log, project status — in JSON, CSV and PDF, and subscribable.',
-  },
   '/access': {
     phase: 1,
     tickets: ['P1-06', 'P1-07'],
