@@ -71,7 +71,7 @@ what was verified and the three decisions taken along the way.
 | P3-05 | Agenda freeze job and the guard | invitee POST after the freeze returns `409 AGENDA_FROZEN` | ◑ |
 | P3-06 | RSVP; attendance with Present / Virtual / Absent and walk-ins | | ✅ |
 | P3-07 | Reschedule and cancel with mandatory reasons | both re-notify | ✅ |
-| P3-08 | Agenda PDF | | ◑ |
+| P3-08 | Agenda PDF | `GET /meetings/:id/agenda.pdf` and `.html`, one template, printed by the same browser as the MoM; DRAFT watermark until confirmed | ✅ |
 | P3-09 | Web: meetings list with all filters; the type chooser; the instant composer; the four-step scheduled wizard | matches the prototype | ✅ |
 | P3-10 | Web: meeting detail with the five tabs — Agenda, Attendance, Actions/Clarifications, Documents, Signed MoM | tab state in the URL | ✅ |
 
@@ -112,8 +112,8 @@ what was verified and the three decisions taken along the way.
 | P5-07 | All 27 automatic events wired to their triggers | one test per event asserting recipients and channels |
 | P5-08 | Nine scheduled jobs, idempotent | re-running a job changes nothing |
 | P5-09 | Quiet hours and notification preferences | reminder classes suppressible, approvals not |
-| P5-10 | `POST /share` with scope-checked recipients | you cannot share with someone you cannot see |
-| P5-11 | Web: the Share dialog at all eight locations; the in-app bell | matches the prototype |
+| P5-10 | `POST /share` with scope-checked recipients | you cannot share with someone you cannot see — **done early**, but it records rather than sends: the dispatcher is P5-01 and the adapters P5-02, so the response says `delivered: false` |
+| P5-11 | Web: the Share dialog at all eight locations; the in-app bell | matches the prototype — **the dialog exists**, wired at the meeting and its Agenda tab; the other six surfaces and the bell remain |
 | P5-12 | Web: communication log with its three tabs | |
 
 **Demo:** circulate a MoM and show the dispatch log filling, including a deliberately failing number.
