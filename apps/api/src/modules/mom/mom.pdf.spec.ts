@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { mergeAnnexures, clip, type Annexure } from './mom.pdf.js';
-import { browserCandidates, findBrowser, noBrowserMessage } from './browser.js';
+import { browserCandidates, findBrowser, noBrowserMessage } from '../../common/print/browser.js';
 
 /**
  * The bundle the client asked for: the minutes, then the papers tabled at the

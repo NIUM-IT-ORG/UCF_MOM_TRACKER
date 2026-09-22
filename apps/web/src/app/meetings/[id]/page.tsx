@@ -41,6 +41,7 @@ import { GenerateMom } from './GenerateMom';
 import { MomPreview } from '@/components/MomPreview';
 import { WhoCan } from '@/components/WhoCan';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { ShareDialog } from '@/components/ShareDialog';
 
 const TABS = ['agenda', 'attendance', 'items', 'documents', 'mom'] as const;
 type TabKey = (typeof TABS)[number];
@@ -66,6 +67,7 @@ export default function MeetingPage() {
     ? (requested as TabKey)
     : 'agenda';
 
+  const [sharing, setSharing] = useState(false);
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [docs, setDocs] = useState<MeetingDoc[]>([]);
@@ -144,9 +146,34 @@ export default function MeetingPage() {
               </span>
             )}
             <StageChip stage={meeting.stage} />
+            {caps.includes('share_object') && (
+              <button type="button" className="btn-ghost" onClick={() => setSharing(true)}>
+                Share
+              </button>
+            )}
           </>
         }
       />
+
+      {sharing && (
+        <ShareDialog
+          subjectType="MEETING"
+          subjectId={meeting.id}
+          subjectRef={meeting.code}
+          defaultSubject={`${meeting.code} · ${meeting.title}`}
+          link={`/meetings/${meeting.id}`}
+          // The agenda travels with the invitation; that is what docs/06 hangs
+          // on MTG-01 and MTG-05, and it is the thing a recipient actually
+          // needs before the meeting.
+          attachments={[
+            { label: 'Agenda PDF', href: `/api/v1/meetings/${meeting.id}/agenda.pdf` },
+            ...(mom
+              ? [{ label: 'MoM PDF', href: `/api/v1/meetings/${meeting.id}/mom.pdf` }]
+              : []),
+          ]}
+          onClose={() => setSharing(false)}
+        />
+      )}
 
       {meeting.stage === 'CANCELLED' && meeting.cancelledReason && (
         <Notice tone="red">
@@ -178,7 +205,9 @@ export default function MeetingPage() {
         ]}
       />
 
-      {tab === 'agenda' && <AgendaTab meeting={meeting} />}
+      {tab === 'agenda' && (
+        <AgendaTab meeting={meeting} canShare={caps.includes('share_object')} />
+      )}
       {tab === 'attendance' && (
         <AttendanceTab
           meeting={meeting}
@@ -208,21 +237,67 @@ export default function MeetingPage() {
   );
 }
 
-function AgendaTab({ meeting }: { meeting: MeetingDetail }) {
+function AgendaTab({ meeting, canShare }: { meeting: MeetingDetail; canShare: boolean }) {
+  const [sharing, setSharing] = useState(false);
+
+  /*
+   * The agenda document is offered even when there is nothing on it yet: the
+   * letterhead, the date, the venue and the invitee list are already worth
+   * circulating, and a coordinator assembling a meeting wants to see what the
+   * notice will look like before they confirm it. It prints with a DRAFT
+   * watermark until the meeting is confirmed, so an early copy cannot be
+   * mistaken for the final one.
+   */
+  const documentActions = (
+    <>
+      <a
+        className="btn-ghost"
+        href={`/api/v1/meetings/${meeting.id}/agenda.pdf`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Agenda PDF
+      </a>
+      {canShare && (
+        <button type="button" className="btn-ghost" onClick={() => setSharing(true)}>
+          Share
+        </button>
+      )}
+    </>
+  );
+
+  const dialog = sharing && (
+    <ShareDialog
+      subjectType="MEETING"
+      subjectId={meeting.id}
+      subjectRef={`${meeting.code} · agenda`}
+      defaultSubject={`Agenda · ${meeting.code} · ${meeting.title}`}
+      link={`/meetings/${meeting.id}?tab=agenda`}
+      attachments={[
+        { label: 'Agenda PDF', href: `/api/v1/meetings/${meeting.id}/agenda.pdf` },
+      ]}
+      onClose={() => setSharing(false)}
+    />
+  );
+
   if (meeting.agenda.length === 0) {
     return (
-      <Card>
-        <Empty>
-          {meeting.type === 'INSTANT'
-            ? 'An instant meeting has no circulated agenda. The points taken are in the minutes.'
-            : 'Nothing on the agenda yet.'}
-        </Empty>
-      </Card>
+      <>
+        {dialog}
+        <Card title="Agenda" actions={documentActions}>
+          <Empty>
+            {meeting.type === 'INSTANT'
+              ? 'An instant meeting has no circulated agenda. The points taken are in the minutes.'
+              : 'Nothing on the agenda yet.'}
+          </Empty>
+        </Card>
+      </>
     );
   }
 
   return (
     <div className="grid gap-4">
+      {dialog}
       {meeting.agendaFreezeAt && (
         <Notice>
           Invitee contributions{' '}
@@ -234,6 +309,7 @@ function AgendaTab({ meeting }: { meeting: MeetingDetail }) {
       <Card
         title="Agenda"
         tag={meeting.stage === 'CONFIRMED' ? 'Circulated and frozen' : 'Draft'}
+        actions={documentActions}
       >
         <ol className="m-0 list-none p-0">
           {meeting.agenda.map((a) => (

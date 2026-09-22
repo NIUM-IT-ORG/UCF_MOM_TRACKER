@@ -15,6 +15,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { ReportsModule } from './modules/reports/reports.module.js';
 import { ItemsModule } from './modules/items/items.module.js';
 import { MomModule } from './modules/mom/mom.module.js';
+import { ShareModule } from './modules/share/share.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor.js';
 import { AuditInterceptor } from './common/audit.interceptor.js';
@@ -40,6 +41,7 @@ import { AuditInterceptor } from './common/audit.interceptor.js';
     DashboardModule,
     ReportsModule,
     MomModule,
+    ShareModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -1,22 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import puppeteer, { type Browser } from 'puppeteer-core';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { StorageService } from '../files/storage.js';
 import { MomDocumentService } from './mom.document.js';
-import { findBrowser, noBrowserMessage } from './browser.js';
+import { htmlToPdf } from '../../common/print/print.js';
 import { mergeAnnexures, type Annexure } from './mom.pdf.js';
 import { DOCUMENT_TYPE_LABEL } from '@mom/shared';
 
 /**
  * The MoM as a single PDF, with the tabled papers behind it.
  *
- * Printing is done by a browser the machine already has — see browser.ts for
- * why nothing is bundled. The browser is launched per request and closed in a
- * `finally`: a leaked headless Chrome is 150 MB of resident memory that
- * nobody notices until the fourth one.
+ * Printing is done by a browser the machine already has — see
+ * common/print/browser.ts for why nothing is bundled, and print.ts for the
+ * launch itself, which the agenda shares.
  */
 @Injectable()
 export class MomPrintService {
@@ -31,7 +29,7 @@ export class MomPrintService {
   async pdf(user: AuthUser, meetingId: string): Promise<{ bytes: Uint8Array; fileName: string }> {
     const { html, code } = await this.document.html(user, meetingId);
 
-    const minutes = await this.render(html);
+    const minutes = await htmlToPdf(html);
     const annexures = await this.collect(user, meetingId);
 
     const { pdf, appended } = await mergeAnnexures(minutes, annexures);
@@ -43,47 +41,6 @@ export class MomPrintService {
     );
 
     return { bytes: pdf, fileName: `${code.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf` };
-  }
-
-  /** The minutes themselves, printed from the one template. */
-  private async render(html: string): Promise<Uint8Array> {
-    const executablePath = findBrowser();
-    if (!executablePath) throw new AppError('INTERNAL', noBrowserMessage());
-
-    let browser: Browser | undefined;
-    try {
-      browser = await puppeteer.launch({
-        executablePath,
-        headless: true,
-        // --no-sandbox is required to run as a service account on Linux and is
-        // harmless here: the only page ever loaded is HTML this server just
-        // generated, never anything fetched from outside.
-        args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-      });
-      const page = await browser.newPage();
-      // `setContent` rather than a URL: the document is already in hand, and a
-      // round trip through the server would need the request's own cookie.
-      await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30_000 });
-      // The template carries @page { size:A4 } and its own margins, so the
-      // margins here are zero and printBackground keeps the crest, the rules
-      // and the green signature panel.
-      return await page.pdf({
-        format: 'a4',
-        printBackground: true,
-        preferCSSPageSize: true,
-        margin: { top: '0', right: '0', bottom: '0', left: '0' },
-      });
-    } catch (err) {
-      if (err instanceof AppError) throw err;
-      throw new AppError(
-        'INTERNAL',
-        `The document could not be printed: ${err instanceof Error ? err.message : 'unknown error'}`,
-      );
-    } finally {
-      await browser?.close().catch(() => {
-        // Closing failed; the process will be reaped. Nothing useful to do.
-      });
-    }
   }
 
   /** The papers tabled at this meeting, with their bytes, in the order they were added. */

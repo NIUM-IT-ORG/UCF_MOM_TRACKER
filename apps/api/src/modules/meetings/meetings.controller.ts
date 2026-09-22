@@ -3,13 +3,16 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
 import {
   agendaItemDto,
@@ -25,8 +28,11 @@ import {
 } from '@mom/shared';
 import { MeetingsService } from './meetings.service.js';
 import { AgendaService } from './agenda.service.js';
+import { AgendaDocumentService } from './agenda.document.js';
 import { AttendanceService } from './attendance.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
+import { htmlToPdf } from '../../common/print/print.js';
+import { RawResponse } from '../../common/interceptors/envelope.interceptor.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CapabilityGuard } from '../auth/capability.guard.js';
 import { RequireCapability } from '../auth/require-capability.decorator.js';
@@ -50,6 +56,7 @@ export class MeetingsController {
   constructor(
     private readonly meetings: MeetingsService,
     private readonly agenda: AgendaService,
+    private readonly agendaDocument: AgendaDocumentService,
     private readonly attendance: AttendanceService,
     private readonly documents: DocumentsService,
   ) {}
@@ -180,6 +187,55 @@ export class MeetingsController {
   @Audited({ objectType: 'MEETING', event: 'ITEMS_CARRIED_FORWARD' })
   carry(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     return this.agenda.carry(user, id, carryDto.parse(body));
+  }
+
+  // ── the agenda as a document (P3-08) ─────────────────────────────────
+
+  /**
+   * The agenda as HTML.
+   *
+   * The same string the PDF is printed from, served on its own so the screen
+   * preview and the printed copy cannot drift — and so an office whose server
+   * has no browser to print with still has something to circulate.
+   *
+   * No capability: `docs/03` gives this to "any · scoped". An agenda is the
+   * document that goes to everyone invited, so anyone who can see the meeting
+   * can read it; the scope filter in the service is what keeps it inside the
+   * caller's projects.
+   */
+  @Get(':id/agenda.html')
+  @RawResponse()
+  @Header('content-type', 'text/html; charset=utf-8')
+  @Header('x-content-type-options', 'nosniff')
+  async agendaHtml(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const { html } = await this.agendaDocument.html(user, id);
+    return html;
+  }
+
+  /**
+   * The agenda as a PDF — `docs/03-API-SPEC.md`, and the attachment `docs/06`
+   * hangs on MTG-01, MTG-03 and MTG-05.
+   *
+   * Printed by the same browser and the same page settings as the minutes, so
+   * the two documents for one meeting match when they are filed together. The
+   * tabled papers are listed on it rather than merged behind it: an agenda is
+   * read before a meeting, and a forty-page bundle does not get read.
+   */
+  @Get(':id/agenda.pdf')
+  @RawResponse()
+  @Header('content-type', 'application/pdf')
+  @Header('x-content-type-options', 'nosniff')
+  async agendaPdf(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { html, fileName } = await this.agendaDocument.pdf(user, id);
+    const bytes = await htmlToPdf(html);
+    // `inline`, not `attachment`: the officer nearly always wants to look at
+    // it first, and every browser offers Save from its own viewer.
+    res.setHeader('content-disposition', `inline; filename="${fileName}"`);
+    return Buffer.from(bytes);
   }
 
   // ── invitees, RSVP, attendance ───────────────────────────────────────

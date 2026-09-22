@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { cdmaCandidates, emblemCandidates, readEmblem } from './mom.emblem.js';
+import { cdmaCandidates, emblemCandidates, readEmblem } from './emblem.js';
 
 /**
  * The crest has to be found from wherever the server happens to be started:

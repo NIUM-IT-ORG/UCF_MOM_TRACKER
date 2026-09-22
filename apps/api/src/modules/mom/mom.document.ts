@@ -5,7 +5,7 @@ import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { renderMomDocument, type MomDocumentData } from './mom.template.js';
-import { cdmaLogo, emblem } from './mom.emblem.js';
+import { cdmaLogo, emblem } from '../../common/print/emblem.js';
 
 /**
  * Gathers everything the document needs, in one query, and hands it to the one

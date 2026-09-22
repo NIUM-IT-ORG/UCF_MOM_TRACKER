@@ -14,6 +14,7 @@ import {
   type MomState,
   type Priority,
 } from '@mom/shared';
+import { PAPER_STYLE, esc, masthead, shortDate, stamp } from '../../common/print/paper.js';
 
 /**
  * The MoM document. One template, one output.
@@ -143,36 +144,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
 <main class="sheet">
 <div class="inner">
 
-  <header class="head${data.emblemDataUri || data.cdmaDataUri ? ' crested' : ''}">
-    ${
-      /*
-       * The state emblem left, the CDMA roundel right, the wording between
-       * them — a government letterhead.
-       *
-       * Either side falls back to an empty column of the same width when its
-       * file is missing, so the titles stay optically centred whether the
-       * office has both crests, one, or neither. A missing file prints nothing
-       * rather than a placeholder: this document goes on the record.
-       */
-      data.emblemDataUri
-        ? `<img class="emblem" src="${data.emblemDataUri}" alt="Government of Telangana" />`
-        : data.cdmaDataUri
-          ? '<div class="spacer" aria-hidden="true"></div>'
-          : ''
-    }
-    <div class="titles">
-      <p class="govt">Government of Telangana</p>
-      <p class="dept">Municipal Administration Department</p>
-      <h1>Minutes of Meeting</h1>
-    </div>
-    ${
-      data.cdmaDataUri
-        ? `<img class="emblem cdma" src="${data.cdmaDataUri}" alt="Commissioner &amp; Director of Municipal Administration" />`
-        : data.emblemDataUri
-          ? '<div class="spacer" aria-hidden="true"></div>'
-          : ''
-    }
-  </header>
+  ${masthead('Minutes of Meeting', data.emblemDataUri, data.cdmaDataUri)}
 
   <table class="facts">
     <tbody>
@@ -181,7 +153,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
         <td colspan="3"><b>${esc(meeting.title)}</b></td>
       </tr>
       <tr>
-        <th>Date</th><td>${longDate(meeting.meetingDate)}</td>
+        <th>Date</th><td>${shortDate(meeting.meetingDate)}</td>
         <th>Time</th><td>${esc(meeting.startTime)} – ${esc(meeting.endTime)} hrs</td>
       </tr>
       <tr>
@@ -405,69 +377,14 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
  * is explicit that this one layout must never reflow responsively.
  */
 const STYLE = `
-:root { --ink:#1B2433; --navy:#13233D; --muted:#5A6B82; --line:#D7DEE8; --accent:#C2703A; }
-* { box-sizing: border-box; }
+${PAPER_STYLE}
 
-/*
- * Times New Roman, because that is what government correspondence in India is
- * set in — every order, proceeding and minute that crosses a desk in this
- * department. Liberation Serif is the metric-compatible substitute on Linux
- * servers, and Nirmala UI carries Telugu if a name or a place is written in
- * it. Changing this one stack changes the whole document.
- */
-body { margin:0; background:#EEF2F7; color:var(--ink);
-  font:13.5px/1.5 "Times New Roman","Liberation Serif","Nirmala UI",Georgia,serif; }
+/* ── the minutes' own rules ─────────────────────────────────────────── */
 
-/*
- * The page border. Government stationery is ruled, and a minute without one
- * does not look like a record — a double rule, the outer heavier, inset far
- * enough that no printer's unprintable margin clips it.
- */
-.sheet { position:relative; width:794px; min-height:1123px; margin:24px auto; padding:34px;
-  background:#fff; box-shadow:0 4px 22px rgba(19,35,61,.13);
-  border:2.4px solid var(--navy); }
-.sheet::before { content:""; position:absolute; inset:5px; border:0.8px solid var(--navy);
-  pointer-events:none; }
-.inner { position:relative; padding:22px 24px 16px; }
 .watermark { position:fixed; inset:0; display:grid; place-items:center; pointer-events:none; z-index:5; }
 .watermark span { font:800 118px/1 "Bitter",Georgia,serif; letter-spacing:.14em; color:#C3372B;
   opacity:.085; transform:rotate(-24deg); border:9px solid currentColor; border-radius:26px;
   padding:18px 44px; }
-
-/* The crest to the left of the titles, as the client's own stationery has it.
-   The empty column on the right is the same width, so the titles read as
-   centred on the page rather than shunted off to one side. */
-.head { text-align:center; padding-bottom:12px; border-bottom:2.2px solid var(--navy); }
-.head.crested { display:grid; grid-template-columns:104px 1fr 104px; gap:14px; align-items:center; }
-.emblem { display:block; height:100px; width:auto; margin:0 auto 0 0; }
-/* The CDMA roundel is a filled circle and the state emblem a fine outline, so
-   matched pixel heights read as mismatched weights. A touch smaller, and
-   pushed to its own edge. */
-.emblem.cdma { height:88px; margin:0 0 0 auto; }
-.titles { text-align:center; }
-.govt { margin:0; font-size:15px; font-weight:700; letter-spacing:1.2px; color:var(--navy); }
-.dept { margin:2px 0 0; font-size:12.5px; font-weight:700; letter-spacing:.7px; color:var(--ink); }
-.titles h1 { margin:7px 0 2px; font:700 20px/1.2 "Times New Roman","Liberation Serif",Georgia,serif;
-  color:var(--navy); }
-
-h2 { margin:20px 0 8px; font:700 14px/1.3 "Times New Roman","Liberation Serif",Georgia,serif; color:var(--navy);
-  padding-bottom:5px; border-bottom:1px solid var(--line); }
-p { margin:0 0 9px; }
-.lede { color:var(--muted); }
-.mono { font-family:ui-monospace,"Cascadia Mono",Menlo,monospace; font-size:11px; }
-.n { width:26px; text-align:center; color:var(--muted); }
-
-table { width:100%; border-collapse:collapse; margin:8px 0 4px; }
-.facts { margin-top:16px; border:1px solid var(--line); }
-.facts th { width:118px; padding:9px 11px; text-align:left; vertical-align:top; background:#F4F7FB;
-  border:1px solid var(--line); font-size:9px; font-weight:800; letter-spacing:1.1px;
-  text-transform:uppercase; color:var(--muted); }
-.facts td { padding:9px 11px; border:1px solid var(--line); vertical-align:top; }
-.vc { display:block; font-size:11px; color:var(--muted); word-break:break-all; }
-
-.grid th { padding:7px 9px; text-align:left; background:#F4F7FB; border:1px solid var(--line);
-  font-size:8.5px; font-weight:800; letter-spacing:.9px; text-transform:uppercase; color:var(--muted); }
-.grid td { padding:7px 9px; border:1px solid var(--line); vertical-align:top; }
 
 .minutes { margin-top:4px; }
 .minutes h3 { margin:14px 0 5px; font:700 12px/1.35 "Bitter",Georgia,serif; color:var(--navy); }
@@ -475,12 +392,6 @@ table { width:100%; border-collapse:collapse; margin:8px 0 4px; }
 .minutes ul, .minutes ol { margin:0 0 8px; padding-left:20px; }
 .minutes mark { background:#FDF0C8; padding:0 2px; }
 .minutes a { color:#2E5FA3; }
-
-.note { margin:8px 0 0; padding:8px 11px; background:#F4F7FB; border-left:3px solid var(--navy);
-  font-size:11.5px; color:var(--muted); }
-.note.instant { border-left-color:var(--accent); margin:14px 0 0; }
-.tag { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
-  color:var(--accent); }
 
 /* One block, hard right — where a signature goes on an order. */
 .signatures { display:flex; justify-content:flex-end; margin:64px 0 0; text-align:center; }
@@ -495,53 +406,11 @@ table { width:100%; border-collapse:collapse; margin:8px 0 4px; }
 .sig.signed .tick { display:flex; justify-content:center; margin-bottom:5px; }
 .sig.signed .stamp { margin-top:3px; font-size:10px; color:#1B7F44; font-weight:700; }
 
-.foot { display:flex; justify-content:space-between; gap:18px; margin-top:34px; padding-top:9px;
-  border-top:1px solid var(--line); font-size:9.5px; letter-spacing:.3px; color:var(--muted); }
-
-@page { size:A4; margin:14mm; }
 @media print {
-  body { background:#fff; }
-  .sheet { width:auto; min-height:0; margin:0; padding:0; box-shadow:none; }
   .watermark { position:fixed; }
-  h2, .grid thead { break-after:avoid; }
-  .grid tr, .sig { break-inside:avoid; }
-  .sheet { box-shadow:none; margin:0; border-width:2px; }
+  .sig { break-inside:avoid; }
 }
 `;
-
-function esc(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function shortDate(d: Date): string {
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
-
-function longDate(d: Date): string {
-  return shortDate(d);
-}
-
-/**
- * The moment a MoM was signed, in the timezone the officers work in.
- *
- * Everything else on this document is a date, so UTC does no harm. A signature
- * timestamp is different: it is evidence, it gets quoted, and "16 Sep 2026,
- * 11:42 pm" for something signed at 5:12 am on the 17th in Hyderabad is the
- * sort of discrepancy that ends up in a note on a file. So this one is printed
- * in IST and says so.
- */
-function stamp(d: Date): string {
-  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-  const hh = String(ist.getUTCHours()).padStart(2, '0');
-  const mm = String(ist.getUTCMinutes()).padStart(2, '0');
-  return `${shortDate(ist)} at ${hh}:${mm} IST`;
-}
 
 /**
  * The tick, drawn rather than typed.
