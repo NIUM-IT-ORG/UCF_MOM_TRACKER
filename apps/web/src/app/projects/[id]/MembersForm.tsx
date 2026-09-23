@@ -47,6 +47,12 @@ export function MembersForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * A search box, because this list is every officer on the system and it
+   * only grows. Scrolling a few hundred rows to find one engineer is the
+   * kind of thing that gets done wrong once and then avoided.
+   */
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     api<Person[]>('/users')
@@ -91,6 +97,26 @@ export function MembersForm({
   const mappable = (people ?? []).filter((p) => !p.seesAllProjects);
   const everywhere = (people ?? []).filter((p) => p.seesAllProjects);
 
+  /*
+   * Name, designation or department — the three things somebody actually
+   * knows about a person they are looking for.
+   *
+   * Anyone already ticked stays visible whatever is typed. Filtering a
+   * selected officer out of sight makes the count at the bottom disagree
+   * with the list above it, and the officer gets un-ticked by somebody who
+   * thinks it is a bug.
+   */
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? mappable.filter(
+        (p) =>
+          p.id in rows ||
+          p.name.toLowerCase().includes(q) ||
+          p.designation.name.toLowerCase().includes(q) ||
+          p.department.name.toLowerCase().includes(q),
+      )
+    : mappable;
+
   return (
     <Card title="Officers on this project" tag="Ticking one gives them sight of it">
       <div className="grid gap-3.5 px-[17px] py-4">
@@ -100,8 +126,25 @@ export function MembersForm({
           <Empty>Loading the officers…</Empty>
         ) : (
           <>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                className="i max-w-[320px]"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, designation or department"
+                aria-label="Search officers"
+              />
+              <span className="text-[11.5px] text-muted">
+                {Object.keys(rows).length} selected
+                {q ? ` · ${shown.length} of ${mappable.length} shown` : ''}
+              </span>
+            </div>
+
             <div className="grid gap-1.5">
-              {mappable.map((p) => {
+              {shown.length === 0 && (
+                <Empty>Nobody matches that. Clear the search to see everyone.</Empty>
+              )}
+              {shown.map((p) => {
                 const on = p.id in rows;
                 return (
                   <div
