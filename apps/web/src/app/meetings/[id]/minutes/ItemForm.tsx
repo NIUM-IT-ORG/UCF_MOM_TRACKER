@@ -54,6 +54,21 @@ export function ItemForm({
   const [priority, setPriority] = useState<Priority>('MEDIUM');
   const [responder, setResponder] = useState<string[]>([]);
   const [people, setPeople] = useState<PickableOfficer[]>([]);
+  /*
+   * Who raised this, which is usually not whoever is typing.
+   *
+   * The Meeting Coordinator minutes on behalf of the chair: they are at the
+   * keyboard for the whole meeting, but the point was raised by the Project
+   * Director, or the engineer, or the chair. Stamping every item with the
+   * typist made the register read as though one person raised everything,
+   * and "who asked for this?" is the first question about any commitment a
+   * year later.
+   *
+   * It still defaults to the person typing, because that is the common case
+   * on an instant meeting and a default nobody changes is better than a
+   * blank nobody fills.
+   */
+  const [raisedById, setRaisedById] = useState('');
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +94,11 @@ export function ItemForm({
   const ownersBad = touched && type === 'ACTION' && owners.length === 0;
   const dueBad = touched && type === 'ACTION' && !dueDate;
 
+  useEffect(() => {
+    // Only as an initial value: an explicit choice must survive a re-render.
+    setRaisedById((cur) => cur || user?.id || '');
+  }, [user?.id]);
+
   function reset() {
     setDescription('');
     setRemarks('');
@@ -86,6 +106,7 @@ export function ItemForm({
     setDueDate('');
     setResponder([]);
     setAgendaItemId('');
+    setRaisedById(user?.id ?? '');
     setTouched(false);
   }
 
@@ -106,7 +127,7 @@ export function ItemForm({
           projectId,
           ...(agendaItemId ? { agendaItemId } : {}),
           description: description.trim(),
-          raisedById: user?.id,
+          raisedById: raisedById || user?.id,
           ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
           ...(type === 'ACTION'
             ? { ownerIds: owners, dueDate, priority }
@@ -229,12 +250,26 @@ export function ItemForm({
               </Field>
 
               <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Raised by" fixed>
-                  <input
+                <Field label="Raised by" required>
+                  <select
                     className="i"
-                    readOnly
-                    value={user ? `${user.name} · ${user.designation.name}` : ''}
-                  />
+                    value={raisedById}
+                    onChange={(e) => setRaisedById(e.target.value)}
+                  >
+                    {/* Only as a fallback: the list below always contains the
+                        signed-in officer once /users has answered. */}
+                    {people.length === 0 && user && (
+                      <option value={user.id}>
+                        {user.name} - {user.designation.name}
+                      </option>
+                    )}
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} - {p.designation.name}
+                        {p.attended ? ' (in the room)' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Project" required>
                   <select
