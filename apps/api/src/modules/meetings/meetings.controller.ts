@@ -223,7 +223,6 @@ export class MeetingsController {
    */
   @Get(':id/agenda.pdf')
   @RawResponse()
-  @Header('content-type', 'application/pdf')
   @Header('x-content-type-options', 'nosniff')
   async agendaPdf(
     @CurrentUser() user: AuthUser,
@@ -232,6 +231,21 @@ export class MeetingsController {
   ) {
     const { html, fileName } = await this.agendaDocument.pdf(user, id);
     const bytes = await htmlToPdf(html);
+
+    /*
+     * The content type is set here rather than with `@Header`, and that is
+     * not a style choice.
+     *
+     * Nest applies `@Header` metadata before the handler runs, so a handler
+     * that throws still answers with `content-type: application/pdf` — and
+     * the exception filter then writes JSON into it. The browser gets a
+     * document that claims to be a PDF and is not, and says only "Failed to
+     * load PDF document", which hides the actual message: most often that
+     * this server has no browser to print with and which package to install.
+     * Setting it after the bytes exist means a failure comes back as a
+     * readable error.
+     */
+    res.setHeader('content-type', 'application/pdf');
     // `inline`, not `attachment`: the officer nearly always wants to look at
     // it first, and every browser offers Save from its own viewer.
     res.setHeader('content-disposition', `inline; filename="${fileName}"`);

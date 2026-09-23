@@ -171,7 +171,6 @@ export class MomController {
    */
   @Get('meetings/:id/mom.pdf')
   @RawResponse()
-  @Header('content-type', 'application/pdf')
   @Header('x-content-type-options', 'nosniff')
   async pdf(
     @CurrentUser() user: AuthUser,
@@ -179,6 +178,15 @@ export class MomController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const { bytes, fileName } = await this.print.pdf(user, id);
+
+    /*
+     * Set here, not with `@Header`: Nest applies that metadata before the
+     * handler runs, so a failure would answer with `content-type:
+     * application/pdf` carrying a JSON error body, and the browser would say
+     * only "Failed to load PDF document" — hiding the message that says what
+     * to install. See the same note on the agenda route.
+     */
+    res.setHeader('content-type', 'application/pdf');
     // `inline`, not `attachment`: the officer nearly always wants to look at
     // it first, and every browser offers Save from its own viewer.
     res.setHeader('content-disposition', `inline; filename="${fileName}"`);

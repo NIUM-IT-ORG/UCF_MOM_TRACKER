@@ -84,6 +84,12 @@ export function noBrowserMessage(platform: NodeJS.Platform = process.platform): 
         : 'Install one:  sudo apt-get install -y chromium';
   return (
     'The PDF is produced by printing the document with a browser, and no browser was found on this server. ' +
-    `${install} If one is installed somewhere unusual, set ${BROWSER_ENV} in .env to its full path.`
+    `${install} If one is installed somewhere unusual, set ${BROWSER_ENV} in .env to its full path. ` +
+    // The way out of the room, not just the diagnosis. The .html route renders
+    // the identical document from the identical template and needs no browser
+    // on the server — so an officer who needs the document today is not stuck
+    // waiting for somebody with sudo.
+    'In the meantime the same document is available as a printable page: open the .html ' +
+    'version of this address and use your browser’s “Save as PDF”.'
   );
 }

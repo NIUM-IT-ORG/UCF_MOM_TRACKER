@@ -66,9 +66,15 @@ export function ShareDialog({
 
   useEffect(() => {
     let live = true;
-    // The picker draws from the scoped people list, so it can only ever offer
-    // officers this user may share with. The server checks again regardless.
-    api<PickableOfficer[]>('/masters/users')
+    /*
+     * `/users`, not `/masters/users`: MastersController is `@Controller()`
+     * with no prefix, so its routes sit at the root of /api/v1 whatever the
+     * folder is called.
+     *
+     * The picker draws from that scoped list, so it can only ever offer
+     * officers this user may share with. The server checks again regardless.
+     */
+    api<PickableOfficer[]>('/users')
       .then((rows) => live && setPeople(rows))
       .catch((e: unknown) => live && setError(e instanceof ApiError ? e.display : String(e)));
     return () => {
