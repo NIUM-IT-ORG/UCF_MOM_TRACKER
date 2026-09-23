@@ -29,6 +29,7 @@ import {
 import { MeetingsService } from './meetings.service.js';
 import { AgendaService } from './agenda.service.js';
 import { AgendaDocumentService } from './agenda.document.js';
+import { externalInviteeDto } from './external-invitee.dto.js';
 import { AttendanceService } from './attendance.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { htmlToPdf } from '../../common/print/print.js';
@@ -268,6 +269,26 @@ export class MeetingsController {
       throw AppError.forbidden('plan_scheduled');
     }
     return this.attendance.setInvitees(user, id, inviteesDto.parse(body));
+  }
+
+  /**
+   * Add somebody who is not on the system — the PRD's External invitee.
+   *
+   * Same capability as setting the invitee list, because it is the same act:
+   * deciding who is in the room. It creates a person record with no login and
+   * no capabilities, and invites them.
+   */
+  @Post(':id/invitees/external')
+  @Audited({ objectType: 'MEETING', event: 'INVITEES_CHANGED' })
+  addExternalInvitee(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    if (!user.caps.includes('plan_scheduled') && !user.caps.includes('plan_instant')) {
+      throw AppError.forbidden('plan_scheduled');
+    }
+    return this.attendance.addExternalInvitee(user, id, externalInviteeDto.parse(body));
   }
 
   /** Any invitee may answer — for themselves. No capability, and no userId in the body. */

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DOCUMENT_TYPE_LABEL, type MomState } from '@mom/shared';
+import { DOCUMENT_TYPE_LABEL, designationLabel, type MomState } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
@@ -37,6 +37,7 @@ export class MomDocumentService {
           select: {
             id: true,
             name: true,
+            title: true,
             designation: { select: { name: true } },
           },
         },
@@ -51,6 +52,7 @@ export class MomDocumentService {
               select: {
                 id: true,
                 name: true,
+                title: true,
                 designation: { select: { name: true } },
                 department: { select: { name: true } },
               },
@@ -155,13 +157,19 @@ export class MomDocumentService {
         vcLink: meeting.vcLink,
         projects: meeting.projects.map((p) => p.project),
         chair: meeting.chair
-          ? { name: meeting.chair.name, designationName: meeting.chair.designation.name }
+          ? {
+              name: meeting.chair.name,
+              designationName: designationLabel(
+                meeting.chair.title,
+                meeting.chair.designation.name,
+              ),
+            }
           : null,
       },
       mom,
       attendance: meeting.invitees.map((i) => ({
         name: i.user.name,
-        designationName: i.user.designation.name,
+        designationName: designationLabel(i.user.title, i.user.designation.name),
         departmentName: i.user.department.name,
         mark: i.attendance,
         isChair: i.user.id === meeting.chair?.id,
@@ -231,10 +239,14 @@ export class MomDocumentService {
     if (!userId) return null;
     const person = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, designation: { select: { name: true } } },
+      select: { name: true, title: true, designation: { select: { name: true } } },
     });
     if (!person) return null;
-    return { name: person.name, designationName: person.designation.name, signedAt };
+    return {
+      name: person.name,
+      designationName: designationLabel(person.title, person.designation.name),
+      signedAt,
+    };
   }
 }
 

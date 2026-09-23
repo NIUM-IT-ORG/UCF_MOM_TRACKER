@@ -186,8 +186,28 @@ model User {
   id            String       @id @default(cuid())
   name          String
   initials      String       @db.VarChar(3)
-  email         String       @unique
-  mobile        String // E.164, used for WhatsApp
+  /// Null only for a person who does not sign in - email IS the login
+  /// identifier, so an officer without one could never get in. The DTO
+  /// enforces that; the column is nullable because external invitees
+  /// (docs/01-PRD.md, the EXT designation) frequently have neither address
+  /// nor number on the day they are added to a meeting.
+  /// Postgres allows many NULLs under a unique index, so uniqueness still
+  /// holds for everybody who has one.
+  email         String?      @unique
+  mobile        String? // E.164, used for WhatsApp
+  /// The designation as typed, for a person who does not sign in.
+  ///
+  /// An external invitee is a banker or a corporation engineer, and what the
+  /// attendance table has to print is "Branch Manager, SBI" - not the name of
+  /// the designation row they are attached to. So this is shown in place of
+  /// the designation wherever a person is displayed.
+  ///
+  /// It is deliberately NOT the thing capability is read from. Rule 1 in
+  /// CLAUDE.md stands: `designationId` still points at a real designation
+  /// (EXT, which carries no capabilities), because a typed string has no
+  /// answer to "what may this person do?" and the access layer must always
+  /// have one.
+  title         String?
   passwordHash  String?      @map("password_hash") // null for INVITE_ONLY
   designationId String       @map("designation_id")
   departmentId  String       @map("department_id")

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { AttendanceDto, InviteesDto, RsvpDto } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
@@ -7,6 +7,30 @@ import type { AuthUser } from '../auth/auth-user.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { MeetingsService } from './meetings.service.js';
 import { advanceMonotonic, isHeldOrLater } from './meeting.machine.js';
+import type { ExternalInviteeDto } from './external-invitee.dto.js';
+
+/** Where people who belong to no arm of the mission are filed. */
+const EXTERNAL_DEPARTMENT = 'External';
+
+/**
+ * Initials from a name, for the avatar. Three characters, because the column
+ * is three: "K. Ramesh" gives KR, "Sri Lakshmi Narayana Rao" gives SLN.
+ *
+ * Non-letters are dropped rather than abbreviated — an initial of "." on an
+ * attendance sheet looks like a defect, and a name typed as "Dr. K. Ramesh"
+ * is entirely ordinary here.
+ */
+function initialsFor(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    .map((part) => part.replace(/[^\p{L}]/gu, '').charAt(0))
+    .filter(Boolean)
+    .join('')
+    .toUpperCase();
+  // A name that is all punctuation cannot happen past the DTO's min(2), but
+  // a single-character initial is legal and "?" beats an empty column.
+  return (letters || name.trim().charAt(0).toUpperCase() || '?').slice(0, 3);
+}
 
 const INVITEE_SELECT = {
   id: true,
@@ -29,6 +53,8 @@ const INVITEE_SELECT = {
 
 @Injectable()
 export class AttendanceService {
+  private readonly log = new Logger('Invitees');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly meetings: MeetingsService,
@@ -106,6 +132,139 @@ export class AttendanceService {
     });
 
     return this.list(user, meetingId);
+  }
+
+  /**
+   * Adds somebody who is not on the system, and invites them.
+   *
+   * The PRD's External invitee: a banker or a corporation engineer who
+   * receives notifications and is named in attendance, and never signs in.
+   * They become a real person record, because everything downstream — the
+   * attendance sheet, the MoM, the circulation log — is keyed on one, and a
+   * name held loose on the invitee row would be absent from all of it.
+   *
+   * What makes them unable to act, belt and braces:
+   *   - the EXT designation, whose capability row is empty;
+   *   - no password, so `accountState` is INVITE_ONLY;
+   *   - and, decisively, no email — `resolveUser` refuses a session to
+   *     anyone without one, so even an address added later is not a login
+   *     until somebody deliberately sets a password.
+   *
+   * The typed designation is kept in `title` and printed in place of the
+   * designation's own name. `designationId` still points at a real row,
+   * because capability is read from there and a typed string cannot answer
+   * the question.
+   */
+  async addExternalInvitee(user: AuthUser, meetingId: string, dto: ExternalInviteeDto) {
+    const meeting = await this.meetings.mustSee(user, meetingId);
+    if (isHeldOrLater(meeting.stage)) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        'This meeting has already been held. Add somebody who turned up as a walk-in instead.',
+      );
+    }
+
+    const designation = await this.prisma.designation.findUnique({
+      where: { code: 'EXT' },
+      select: { id: true },
+    });
+    if (!designation) {
+      // Seeded master data; if it is missing the installation is incomplete
+      // and saying so beats creating a designation nobody configured.
+      throw new AppError(
+        'INTERNAL',
+        'The External invitee designation is missing from the master data, so external people cannot be added. Restore it under People > Designations.',
+      );
+    }
+
+    if (dto.email) {
+      const clash = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+        select: { id: true, name: true },
+      });
+      if (clash) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          `${clash.name} already uses that email address. Invite them from the list instead of adding them again.`,
+          { field: 'email' },
+        );
+      }
+    }
+
+    const departmentId = await this.externalDepartmentId();
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const person = await tx.user.create({
+        data: {
+          name: dto.name,
+          initials: initialsFor(dto.name),
+          email: dto.email ?? null,
+          mobile: dto.mobile ?? null,
+          title: dto.designation,
+          designationId: designation.id,
+          departmentId,
+          accountState: 'INVITE_ONLY',
+          passwordHash: null,
+        },
+        select: { id: true, name: true },
+      });
+
+      await tx.meetingInvitee.create({ data: { meetingId, userId: person.id } });
+
+      await tx.auditEntry.create({
+        data: {
+          actorId: user.id,
+          objectType: 'MEETING',
+          objectId: meetingId,
+          objectRef: meeting.code,
+          event: 'EXTERNAL_INVITEE_ADDED',
+          detail: `${dto.name} (${dto.designation}) added as an external invitee`,
+          after: {
+            userId: person.id,
+            name: dto.name,
+            title: dto.designation,
+            email: dto.email ?? null,
+            mobile: dto.mobile ?? null,
+          },
+        },
+      });
+
+      if (meeting.type === 'SCHEDULED') {
+        await tx.meeting.update({
+          where: { id: meetingId },
+          data: {
+            stage: advanceMonotonic('SCHEDULED', meeting.stage, 'addInvitees'),
+            ...(meeting.agendaFreezeAt ? {} : { agendaFreezeAt: freezeAt(meeting.meetingDate) }),
+          },
+        });
+      }
+
+      return person;
+    });
+
+    this.log.log(`${meeting.code}: external invitee ${created.name} added`);
+    return this.list(user, meetingId);
+  }
+
+  /**
+   * The department external people are filed under.
+   *
+   * `users.department_id` is required and an external belongs to no arm of
+   * the mission, so one well-known row holds them all. Created on first use
+   * rather than seeded, so an existing installation needs no migration and
+   * an office that never adds an external never grows the row.
+   */
+  private async externalDepartmentId(): Promise<string> {
+    const found = await this.prisma.department.findUnique({
+      where: { name: EXTERNAL_DEPARTMENT },
+      select: { id: true },
+    });
+    if (found) return found.id;
+    const made = await this.prisma.department.create({
+      data: { name: EXTERNAL_DEPARTMENT },
+      select: { id: true },
+    });
+    return made.id;
   }
 
   /** Your own response, and nobody else's. */

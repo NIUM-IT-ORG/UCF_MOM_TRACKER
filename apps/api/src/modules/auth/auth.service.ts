@@ -273,7 +273,15 @@ export class AuthService {
         projects: { select: { projectId: true } },
       },
     });
-    if (!user || user.accountState !== 'ACTIVE') return null;
+    /*
+     * No email, no session. Email is the login identifier, so a person
+     * without one cannot have signed in — and since external invitees are
+     * exactly the people allowed to have no email, this is the line that
+     * keeps "can be named in attendance" from ever becoming "can act". It is
+     * a null return rather than a throw: to the caller this is simply not a
+     * usable session, the same as a suspended account.
+     */
+    if (!user || user.accountState !== 'ACTIVE' || !user.email) return null;
 
     return {
       id: user.id,
@@ -305,6 +313,12 @@ export class AuthService {
       },
     });
     if (!user) throw AppError.notFound('That user');
+    /*
+     * Unreachable through the guard, which has already refused a session for
+     * anyone without an email — but stated rather than asserted, because the
+     * alternative is `user.email!` and a null quietly reaching the top bar.
+     */
+    if (!user.email) throw AppError.notFound('That user');
 
     return {
       id: user.id,

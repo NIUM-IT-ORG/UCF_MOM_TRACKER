@@ -7,18 +7,40 @@ import { RequireCapability } from '../auth/require-capability.decorator.js';
 import { CurrentUser, type AuthUser } from '../auth/auth-user.js';
 import { Audited } from '../../common/audit.interceptor.js';
 
+/**
+ * Who may be saved without contact details.
+ *
+ * Email is the login identifier, so a person without one can never sign in.
+ * That is correct for an external invitee — `docs/01-PRD.md` says so in as
+ * many words, "No login" — and a trap for anybody else: an officer created
+ * with no address would be accepted here and locked out at the door, with
+ * nothing on screen to explain it. So the rule is by designation, and the
+ * message says which field and why.
+ */
+const NO_LOGIN_DESIGNATION = 'EXT';
+
 const createUser = z
   .object({
     name: z.string().trim().min(2),
     initials: z.string().trim().min(1).max(3),
-    email: z.string().trim().toLowerCase().email(),
-    mobile: z.string().trim().min(8),
+    email: z.string().trim().toLowerCase().email().optional(),
+    mobile: z.string().trim().min(8).optional(),
     designationCode: z.string().trim().min(2),
     departmentId: z.string().min(1),
+    /** The designation as typed; external invitees only. */
+    title: z.string().trim().min(2).max(120).optional(),
     seesAllProjects: z.boolean().optional(),
     password: z.string().min(12).optional(),
   })
-  .strict();
+  .strict()
+  .refine((u) => u.designationCode === NO_LOGIN_DESIGNATION || !!u.email, {
+    message: 'An officer signs in with their email address, so this one is required.',
+    path: ['email'],
+  })
+  .refine((u) => u.designationCode === NO_LOGIN_DESIGNATION || !!u.mobile, {
+    message: 'A mobile number is required for anyone who signs in.',
+    path: ['mobile'],
+  });
 
 const updateUser = z
   .object({

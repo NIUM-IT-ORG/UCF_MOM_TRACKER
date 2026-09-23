@@ -11,7 +11,9 @@ export interface MatrixRow {
 }
 
 export interface EffectiveAccess {
-  user: { id: string; name: string; email: string; accountState: string };
+  // Nullable, unlike the session's: this view describes any person on the
+  // system, and an external invitee is allowed to have no address at all.
+  user: { id: string; name: string; email: string | null; accountState: string };
   designation: { code: string; name: string; band: string };
   /** Every capability, held or not, with its label — so the UI shows both. */
   capabilities: { key: Capability; label: string; held: boolean }[];

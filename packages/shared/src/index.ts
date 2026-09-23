@@ -1,4 +1,5 @@
 export * from './capabilities.js';
+export * from './display.js';
 export * from './enums.js';
 export * from './envelope.js';
 export * from './dto/auth.js';

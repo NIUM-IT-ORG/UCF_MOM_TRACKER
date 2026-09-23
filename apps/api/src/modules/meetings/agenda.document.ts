@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DOCUMENT_TYPE_LABEL } from '@mom/shared';
+import { DOCUMENT_TYPE_LABEL, designationLabel } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope } from '../../common/scope.js';
@@ -48,7 +48,7 @@ export class AgendaDocumentService {
         confirmedAt: true,
         cancelledReason: true,
         chair: {
-          select: { id: true, name: true, designation: { select: { name: true } } },
+          select: { id: true, name: true, title: true, designation: { select: { name: true } } },
         },
         projects: {
           select: { project: { select: { code: true, name: true, fullName: true } } },
@@ -59,6 +59,7 @@ export class AgendaDocumentService {
               select: {
                 id: true,
                 name: true,
+                title: true,
                 designation: { select: { name: true } },
                 department: { select: { name: true } },
               },
@@ -136,7 +137,13 @@ export class AgendaDocumentService {
         vcLink: meeting.vcLink,
         projects: meeting.projects.map((p) => p.project),
         chair: meeting.chair
-          ? { name: meeting.chair.name, designationName: meeting.chair.designation.name }
+          ? {
+              name: meeting.chair.name,
+              designationName: designationLabel(
+                meeting.chair.title,
+                meeting.chair.designation.name,
+              ),
+            }
           : null,
         agendaFreezeAt: meeting.agendaFreezeAt,
         confirmedAt: meeting.confirmedAt,
@@ -162,7 +169,7 @@ export class AgendaDocumentService {
       })),
       invitees: meeting.invitees.map((i) => ({
         name: i.user.name,
-        designationName: i.user.designation.name,
+        designationName: designationLabel(i.user.title, i.user.designation.name),
         departmentName: i.user.department.name,
         isChair: i.user.id === meeting.chair?.id,
       })),

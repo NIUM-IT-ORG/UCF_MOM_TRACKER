@@ -17,6 +17,7 @@ import {
   Steps,
   TableWrap,
 } from '@/components/ui';
+import { ExternalInviteeForm } from '@/components/ExternalInviteeForm';
 import { MeetingFields, draftErrors, emptyDraft, type MeetingDraft } from '../MeetingForm';
 
 const STEPS = ['Details', 'Agenda', 'Invitees', 'Confirm'];
@@ -137,6 +138,20 @@ export default function ScheduledWizard() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * After an external invitee is created, the people list is stale and the
+   * new person is already invited server-side. Refresh both, and tick them,
+   * so the checkbox state matches what the meeting actually holds.
+   */
+  async function reloadPeopleAndInvitees(id: string) {
+    const [all, current] = await Promise.all([
+      api<Person[]>('/users').catch(() => people),
+      api<{ user: { id: string } }[]>(`/meetings/${id}/invitees`).catch(() => []),
+    ]);
+    setPeople(all);
+    setInvitees((cur) => [...new Set([...cur, ...current.map((i) => i.user.id)])]);
   }
 
   async function loadAgenda(id: string) {
@@ -522,6 +537,21 @@ export default function ScheduledWizard() {
                 );
               })}
             </div>
+            {/*
+              * The bank manager and the corporation engineer are rarely on
+              * the system, and the moment anybody knows they are coming is
+              * this one. Sending the coordinator to the People screen to have
+              * an account created is how they end up left off the sheet.
+              */}
+            <div className="mt-3">
+              {meetingId && (
+                <ExternalInviteeForm
+                  meetingId={meetingId}
+                  onAdded={() => reloadPeopleAndInvitees(meetingId)}
+                />
+              )}
+            </div>
+
             <div className="mt-4 flex flex-wrap gap-2.5">
               <button className="btn-primary" type="button" onClick={() => void saveInvitees()} disabled={busy}>
                 {busy ? 'Saving…' : 'Save and continue'}

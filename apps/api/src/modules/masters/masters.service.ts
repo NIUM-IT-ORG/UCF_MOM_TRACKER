@@ -31,8 +31,11 @@ export interface DesignationInput {
 export interface CreateUserInput {
   name: string;
   initials: string;
-  email: string;
-  mobile: string;
+  /** Optional only for a designation that cannot sign in; the DTO enforces it. */
+  email?: string;
+  mobile?: string;
+  /** The designation as typed, printed in place of the designation row. */
+  title?: string;
   designationCode: string;
   departmentId: string;
   seesAllProjects?: boolean;
@@ -104,22 +107,28 @@ export class MastersService {
     });
     if (!designation) throw AppError.notFound(`Designation ${input.designationCode}`);
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email: input.email.toLowerCase() },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new AppError('VALIDATION_FAILED', 'That email address is already in use.', {
-        field: 'email',
+    // Only when one was given. Many people may have no address — Postgres
+    // allows that under the unique index — but two may not share one.
+    const email = input.email?.toLowerCase() ?? null;
+    if (email) {
+      const existing = await this.prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
       });
+      if (existing) {
+        throw new AppError('VALIDATION_FAILED', 'That email address is already in use.', {
+          field: 'email',
+        });
+      }
     }
 
     return this.prisma.user.create({
       data: {
         name: input.name,
         initials: input.initials.toUpperCase().slice(0, 3),
-        email: input.email.toLowerCase(),
-        mobile: input.mobile,
+        email,
+        mobile: input.mobile ?? null,
+        title: input.title ?? null,
         designationId: designation.id,
         departmentId: input.departmentId,
         seesAllProjects: input.seesAllProjects ?? false,

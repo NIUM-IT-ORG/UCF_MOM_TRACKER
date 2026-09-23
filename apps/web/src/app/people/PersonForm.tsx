@@ -83,8 +83,10 @@ export function PersonForm({
     const body: Record<string, unknown> = {
       name: v.name.trim(),
       initials: (v.initials || suggestInitials(v.name)).toUpperCase(),
-      email: v.email.trim().toLowerCase(),
-      mobile: v.mobile.trim(),
+      // Sent only when given. An external invitee may have neither, and the
+      // server takes an address or nothing - "" is neither.
+      ...(v.email.trim() ? { email: v.email.trim().toLowerCase() } : {}),
+      ...(v.mobile.trim() ? { mobile: v.mobile.trim() } : {}),
       designationCode: v.designationCode,
       departmentId: v.departmentId,
       seesAllProjects: v.seesAllProjects,
@@ -114,10 +116,21 @@ export function PersonForm({
     }
   }
 
+  /*
+   * Contact details are required of anyone who signs in, and optional for
+   * anyone who does not.
+   *
+   * Email IS the login identifier, so an officer saved without one would be
+   * accepted and then locked out at the door with nothing on screen to
+   * explain it. External invitees are the exception the PRD names - "No
+   * login" - and on the day they are added their number is frequently not
+   * known. The server enforces exactly this rule; the form only says so
+   * earlier.
+   */
+  const signsIn = v.designationCode !== 'EXT';
   const ready =
     v.name.trim().length > 1 &&
-    v.email.trim().length > 3 &&
-    v.mobile.trim().length > 7 &&
+    (!signsIn || (v.email.trim().length > 3 && v.mobile.trim().length > 7)) &&
     v.designationCode &&
     v.departmentId;
 
@@ -150,7 +163,16 @@ export function PersonForm({
         </div>
 
         <div className="grid gap-3.5 sm:grid-cols-2">
-          <Field label="Email" required error={fieldErrors.email} hint="This is the sign-in identity.">
+          <Field
+            label="Email"
+            required={signsIn}
+            error={fieldErrors.email}
+            hint={
+              signsIn
+                ? 'This is the sign-in identity.'
+                : 'Optional - an external invitee does not sign in. Without one, nothing can be emailed to them.'
+            }
+          >
             <input
               className="i"
               type="email"
@@ -159,7 +181,16 @@ export function PersonForm({
               placeholder="officer.g@example.gov"
             />
           </Field>
-          <Field label="Mobile" required error={fieldErrors.mobile} hint="Where WhatsApp and SMS go.">
+          <Field
+            label="Mobile"
+            required={signsIn}
+            error={fieldErrors.mobile}
+            hint={
+              signsIn
+                ? 'Where WhatsApp and SMS go.'
+                : 'Optional. Without one, no WhatsApp or SMS can reach them.'
+            }
+          >
             <input
               className="i"
               value={v.mobile}
