@@ -63,6 +63,16 @@ export default function ScheduledWizard() {
   const [newPoint, setNewPoint] = useState('');
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [carry, setCarry] = useState<Record<string, string>>({});
+  /*
+   * The carry list stays folded away until it is asked for.
+   *
+   * Open actions on a busy project run to dozens, and a table of them opening
+   * between the agenda and the invitees made the step look like its job was
+   * reviewing old work — coordinators were scrolling past it to get to the
+   * point they came to add. It is offered, with its count, and shown on
+   * request.
+   */
+  const [showCarry, setShowCarry] = useState(false);
 
   const [people, setPeople] = useState<Person[]>([]);
   const [invitees, setInvitees] = useState<string[]>([]);
@@ -323,18 +333,43 @@ export default function ScheduledWizard() {
             tag={carryBlock ? `${carryBlock.carriedItems?.length ?? 0} already on the agenda` : 'Agenda item 0'}
           >
             <div className="px-[17px] py-4">
-              <Notice>
-                Only items whose MoM has actually been circulated appear here — an item nobody has
-                been told about is not a commitment to review. Carrying an action forward a{' '}
-                <b>second</b> time needs a revised due date.
-              </Notice>
-
               {candidates === null ? (
                 <Empty>Loading…</Empty>
               ) : candidates.length === 0 ? (
                 <Empty>Nothing open on these projects. Nothing to carry forward.</Empty>
+              ) : !showCarry ? (
+                /*
+                 * Closed by default. The count is still shown, because "there
+                 * are 14 open actions on these projects" is itself worth
+                 * knowing before a meeting — it is the decision about whether
+                 * to look, and hiding it entirely would just move the
+                 * surprise to the meeting itself.
+                 */
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={() => setShowCarry(true)}
+                  >
+                    Show actions ({candidates.filter((c) => !c.alreadyCarried).length})
+                  </button>
+                  <span className="text-[12px] text-muted">
+                    {candidates.length} open item{candidates.length === 1 ? '' : 's'} on the
+                    projects this meeting covers
+                    {carryBlock?.carriedItems?.length
+                      ? ` · ${carryBlock.carriedItems.length} already on the agenda`
+                      : ''}
+                    .
+                  </span>
+                </div>
               ) : (
                 <>
+                  <Notice>
+                    Only items whose MoM has actually been circulated appear here — an item nobody
+                    has been told about is not a commitment to review. Carrying an action forward a{' '}
+                    <b>second</b> time needs a revised due date.
+                  </Notice>
+
                   <TableWrap>
                     <table>
                       <thead>
@@ -412,14 +447,28 @@ export default function ScheduledWizard() {
                     </table>
                   </TableWrap>
 
-                  <button
-                    className="btn-primary mt-3"
-                    type="button"
-                    onClick={() => void applyCarry()}
-                    disabled={busy || Object.keys(carry).length === 0}
-                  >
-                    Carry {Object.keys(carry).length || ''} forward
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2.5">
+                    <button
+                      className="btn-primary"
+                      type="button"
+                      onClick={() => void applyCarry()}
+                      disabled={busy || Object.keys(carry).length === 0}
+                    >
+                      Carry {Object.keys(carry).length || ''} forward
+                    </button>
+                    <button
+                      className="btn-ghost"
+                      type="button"
+                      onClick={() => {
+                        setShowCarry(false);
+                        // Folding it away discards an unconfirmed selection
+                        // rather than carrying it invisibly into a later click.
+                        setCarry({});
+                      }}
+                    >
+                      Hide actions
+                    </button>
+                  </div>
                 </>
               )}
             </div>

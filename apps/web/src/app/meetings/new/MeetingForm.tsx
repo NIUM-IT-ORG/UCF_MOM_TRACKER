@@ -10,6 +10,20 @@ import { useSession } from '@/lib/session';
 import { Field } from '@/components/ui';
 import type { Person } from '@/lib/meetings';
 
+/** Just enough of a project to offer it in the picker. */
+interface ProjectOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+/** By id, keeping the first occurrence, then ordered by code as the API does. */
+function dedupe(rows: ProjectOption[]): ProjectOption[] {
+  const seen = new Map<string, ProjectOption>();
+  for (const r of rows) if (!seen.has(r.id)) seen.set(r.id, r);
+  return [...seen.values()].sort((a, b) => a.code.localeCompare(b.code));
+}
+
 export interface MeetingDraft {
   category: MeetingCategory;
   title: string;
@@ -71,9 +85,22 @@ export function MeetingFields({
   errors: Partial<Record<keyof MeetingDraft, string>>;
   showErrors: boolean;
 }) {
-  const { user } = useSession();
+  const { user, caps } = useSession();
   const [people, setPeople] = useState<Person[]>([]);
+  const [allProjects, setAllProjects] = useState<ProjectOption[] | null>(null);
   const err = (k: keyof MeetingDraft) => (showErrors ? (errors[k] ?? null) : null);
+
+  /*
+   * Whether this officer's scope is their mappings or everything.
+   *
+   * `user.projects` is the *explicitly mapped* list, and the schema is
+   * deliberate that "a user with seesAllProjects = true needs no rows here".
+   * So reading only the mappings meant a PDMC — whose job in docs/01 is to
+   * "plan and run meetings across all projects", and who holds
+   * `view_all_projects` precisely so they need no mappings — opened this form
+   * and was told there was nothing to meet about.
+   */
+  const seesAll = Boolean(user?.seesAllProjects) || caps.includes('view_all_projects');
 
   useEffect(() => {
     api<Person[]>('/users')
@@ -81,7 +108,22 @@ export function MeetingFields({
       .catch(() => setPeople([]));
   }, []);
 
-  const projects = user?.projects ?? [];
+  useEffect(() => {
+    if (!seesAll) return;
+    // `/projects` is scoped server-side too, so this cannot widen anybody's
+    // reach — it just stops the form being narrower than the caller's scope.
+    api<ProjectOption[]>('/projects')
+      .then(setAllProjects)
+      .catch(() => setAllProjects([]));
+  }, [seesAll]);
+
+  /*
+   * Mapped projects always count, even for somebody who sees everything —
+   * the two lists are merged rather than swapped, so a head-office officer
+   * who also happens to be mapped somewhere never loses that project while
+   * `/projects` is still loading.
+   */
+  const projects = dedupe([...(user?.projects ?? []), ...(allProjects ?? [])]);
 
   return (
     <div className="grid gap-4">
@@ -178,7 +220,9 @@ export function MeetingFields({
         label="Projects"
         required
         error={err('projectIds')}
-        hint="Only projects you are mapped to. The reference is built from this — one project uses its code, several use HO."
+        hint={`${
+          seesAll ? 'Every project, since you see them all.' : 'Only projects you are mapped to.'
+        } The reference is built from this — one project uses its code, several use HO.`}
       >
         <div
           className={`grid gap-1.5 rounded-[10px] border p-2.5 sm:grid-cols-2 ${
@@ -187,7 +231,11 @@ export function MeetingFields({
         >
           {projects.length === 0 && (
             <span className="px-1 py-1 text-[12px] text-muted">
-              You are not mapped to any project, so there is nothing to meet about yet.
+              {seesAll && allProjects === null
+                ? 'Loading projects…'
+                : seesAll
+                  ? 'No projects have been created yet, so there is nothing to meet about.'
+                  : 'You are not mapped to any project, so there is nothing to meet about yet. Ask an administrator to add you to one.'}
             </span>
           )}
           {projects.map((p) => {

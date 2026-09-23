@@ -43,7 +43,23 @@ export function Editor({
 
   return (
     <div className={`rounded-[10px] border ${disabled ? 'border-line bg-[#F6F8FB]' : 'border-line bg-white'}`}>
-      <div className="flex flex-wrap gap-1 border-b border-line px-2 py-1.5" role="toolbar" aria-label="Formatting">
+      {/*
+        * Sticky, because the minutes of a two-hour review run well past one
+        * screen and the formatting buttons were scrolling away exactly when
+        * they start being needed. `.stage` is the scroll container, so this
+        * pins just under the top bar.
+        *
+        * The background is opaque and matches the card — a translucent
+        * toolbar with body text sliding under it is harder to read than no
+        * toolbar at all.
+        */}
+      <div
+        className={`sticky top-0 z-10 flex flex-wrap gap-1 rounded-t-[10px] border-b border-line px-2 py-1.5 ${
+          disabled ? 'bg-[#F6F8FB]' : 'bg-white'
+        }`}
+        role="toolbar"
+        aria-label="Formatting"
+      >
         <Btn label="Heading" title="Sub-heading" onClick={() => exec('formatBlock', 'h3')} disabled={disabled} />
         <Btn label="B" title="Bold" bold onClick={() => exec('bold')} disabled={disabled} />
         <Btn label="I" title="Italic" italic onClick={() => exec('italic')} disabled={disabled} />
