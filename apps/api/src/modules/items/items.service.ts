@@ -118,10 +118,28 @@ export class ItemsService {
       ];
     }
 
+    /*
+     * Newest first, like every other listing in the product.
+     *
+     * This used to be `dueDate asc` — the soonest-due at the top, which reads
+     * well for somebody working a queue. It is out of step with the meetings
+     * list and the MoM register, which both open newest-first, and an officer
+     * who has just raised three actions expects to see them without paging
+     * past work from six months ago.
+     *
+     * Overdue work is not lost by this: the register carries an ageing column
+     * and a status filter, and the dashboard's attention list is ordered by
+     * urgency precisely so that "what is late" has a home of its own.
+     *
+     * `createdAt`, not `ref`: refs are issued per type, so ACT-12 and CLA-03
+     * do not sort against each other in any meaningful order. The tiebreak
+     * exists only so two items written in the same transaction come back in a
+     * stable order rather than shuffling between requests.
+     */
     const rows = await this.prisma.item.findMany({
       where,
       select: ITEM_SELECT,
-      orderBy: [{ dueDate: 'asc' }, { ref: 'asc' }],
+      orderBy: [{ createdAt: 'desc' }, { ref: 'desc' }],
     });
     return rows.map((r) => decorate(r));
   }
