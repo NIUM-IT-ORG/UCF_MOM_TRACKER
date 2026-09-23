@@ -38,13 +38,29 @@ export function Modal({
   const panel = useRef<HTMLDivElement>(null);
   const returnTo = useRef<HTMLElement | null>(null);
 
+  /*
+   * The latest onClose, without it being a dependency.
+   *
+   * Every caller passes an inline arrow — `onClose={() => setOpen(false)}` —
+   * so the prop is a new function on every render. With `[onClose]` as the
+   * dependency the whole effect tore down and re-ran on each one, and since
+   * it both restores focus on cleanup and grabs it on setup, typing a single
+   * letter into any field in any dialog threw focus to the close button. The
+   * next keystroke went nowhere.
+   *
+   * A ref keeps the handler current while the effect runs once, on mount,
+   * which is what "trap the focus while this dialog is open" actually means.
+   */
+  const latestClose = useRef(onClose);
+  useEffect(() => {
+    latestClose.current = onClose;
+  });
+
   useEffect(() => {
     returnTo.current = document.activeElement as HTMLElement | null;
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
 
-    // The first field, not the close button: opening a form and landing on
-    // "cancel" is a small insult repeated every time.
     const focusable = () =>
       Array.from(
         panel.current?.querySelectorAll<HTMLElement>(
@@ -52,18 +68,29 @@ export function Modal({
         ) ?? [],
       ).filter((el) => el.offsetParent !== null);
 
-    focusable()[0]?.focus();
+    /*
+     * The first field, not the close button: opening a form and landing on
+     * "cancel" is a small insult repeated every time.
+     *
+     * That was the intent all along, but the close button sits in the header
+     * and so is first in document order — `focusable()[0]` was picking
+     * exactly the control the comment said to avoid. It is skipped here for
+     * the opening focus only; it stays in the tab cycle, where it belongs.
+     */
+    const items = focusable();
+    const opener = items.find((el) => el.dataset.modalClose === undefined) ?? items[0];
+    opener?.focus();
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        latestClose.current();
         return;
       }
       if (e.key !== 'Tab') return;
-      const items = focusable();
-      const first = items[0];
-      const last = items[items.length - 1];
+      const cycle = focusable();
+      const first = cycle[0];
+      const last = cycle[cycle.length - 1];
       if (!first || !last) return;
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();
@@ -80,7 +107,9 @@ export function Modal({
       document.body.style.overflow = overflow;
       returnTo.current?.focus?.();
     };
-  }, [onClose]);
+    // Mount only, deliberately: see the note on `latestClose` above. A
+    // dependency here re-runs the focus trap mid-edit and steals the caret.
+  }, []);
 
   return (
     <div
@@ -107,6 +136,8 @@ export function Modal({
           <button
             type="button"
             onClick={onClose}
+            // Skipped when choosing where focus lands on open; still tabbable.
+            data-modal-close=""
             aria-label="Close"
             className="-mr-1 rounded-lg px-2 py-1 text-[20px] leading-none text-muted hover:bg-[#F4F7FB] hover:text-navy"
           >
