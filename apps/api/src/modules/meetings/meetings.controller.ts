@@ -227,29 +227,31 @@ export class MeetingsController {
   async agendaPdf(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+    // `@Res()` without `passthrough`, and the handler returns nothing. With
+    // passthrough, Nest replies for us — and it replies with `res.json()` for
+    // anything `typeof body === 'object'`, which a Buffer is. The wire then
+    // carries `{"type":"Buffer","data":[37,80,68,70,…]}` under a PDF content
+    // type, and every viewer reports only "Failed to load PDF document".
+    // Writing the response here is what makes it binary. See
+    // binary-response.spec.ts, which asserts the bytes over a real socket.
+    @Res() res: Response,
+  ): Promise<void> {
     const { html, fileName } = await this.agendaDocument.pdf(user, id);
     const bytes = await htmlToPdf(html);
 
     /*
-     * The content type is set here rather than with `@Header`, and that is
-     * not a style choice.
+     * The content type is set after the bytes exist, not with `@Header`.
      *
      * Nest applies `@Header` metadata before the handler runs, so a handler
-     * that throws still answers with `content-type: application/pdf` — and
-     * the exception filter then writes JSON into it. The browser gets a
-     * document that claims to be a PDF and is not, and says only "Failed to
-     * load PDF document", which hides the actual message: most often that
-     * this server has no browser to print with and which package to install.
-     * Setting it after the bytes exist means a failure comes back as a
-     * readable error.
+     * that throws would still answer `content-type: application/pdf` with the
+     * exception filter's JSON inside it — the same unreadable failure, hiding
+     * the message that says what is actually wrong.
      */
     res.setHeader('content-type', 'application/pdf');
     // `inline`, not `attachment`: the officer nearly always wants to look at
     // it first, and every browser offers Save from its own viewer.
     res.setHeader('content-disposition', `inline; filename="${fileName}"`);
-    return Buffer.from(bytes);
+    res.send(Buffer.from(bytes));
   }
 
   // ── invitees, RSVP, attendance ───────────────────────────────────────

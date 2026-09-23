@@ -175,22 +175,26 @@ export class MomController {
   async pdf(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+    // `@Res()` without `passthrough`, writing the response here rather than
+    // returning the Buffer: Nest replies to a returned object with
+    // `res.json()`, and a Buffer is an object, so the minutes went out as
+    // `{"type":"Buffer","data":[…]}` under a PDF content type. See the note
+    // on the agenda route and binary-response.spec.ts.
+    @Res() res: Response,
+  ): Promise<void> {
     const { bytes, fileName } = await this.print.pdf(user, id);
 
     /*
      * Set here, not with `@Header`: Nest applies that metadata before the
-     * handler runs, so a failure would answer with `content-type:
-     * application/pdf` carrying a JSON error body, and the browser would say
-     * only "Failed to load PDF document" — hiding the message that says what
-     * to install. See the same note on the agenda route.
+     * handler runs, so a failure would answer `content-type: application/pdf`
+     * carrying a JSON error body — the same unreadable failure, hiding the
+     * message that says what to fix.
      */
     res.setHeader('content-type', 'application/pdf');
     // `inline`, not `attachment`: the officer nearly always wants to look at
     // it first, and every browser offers Save from its own viewer.
     res.setHeader('content-disposition', `inline; filename="${fileName}"`);
-    return Buffer.from(bytes);
+    res.send(Buffer.from(bytes));
   }
 
   @Post('meetings/:id/mom/corrigendum')

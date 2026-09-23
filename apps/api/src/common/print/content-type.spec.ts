@@ -39,6 +39,28 @@ describe('a PDF route never declares its content type as metadata', () => {
       expect(src).toMatch(/setHeader\(\s*['"]content-type['"]\s*,\s*['"]application\/pdf/i);
     }
   });
+
+  /*
+   * The second half of the same failure, and the one that actually reached
+   * the client: with `passthrough: true` Nest replies for you, and it replies
+   * with `res.json()` for anything `typeof body === 'object'`. A Buffer is an
+   * object, so a returned PDF went out as
+   * `{"type":"Buffer","data":[37,80,68,70,…]}` — valid bytes, produced
+   * correctly, then described instead of sent.
+   *
+   * A PDF route therefore writes its own response. binary-response.spec.ts
+   * proves the replacement shape over a real socket; this stops the old one
+   * coming back.
+   */
+  it.each(ROUTES)('%s does not hand a PDF back through passthrough', (path) => {
+    const src = readFileSync(path, 'utf8');
+    if (!/\.pdf['"]\)/.test(src)) return;
+
+    expect(src).not.toMatch(/@Res\(\s*\{\s*passthrough/);
+    expect(src).toMatch(/res\.send\(\s*Buffer\.from/);
+    // A returned Buffer is the bug however the response object was injected.
+    expect(src).not.toMatch(/return\s+Buffer\.from/);
+  });
 });
 
 describe('the message a missing browser produces', () => {
