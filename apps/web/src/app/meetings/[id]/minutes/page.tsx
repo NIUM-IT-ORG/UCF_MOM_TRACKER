@@ -54,7 +54,9 @@ export default function MinutesPage() {
     try {
       const [m, min, its, mm, docs] = await Promise.all([
         api<MeetingDetail>(`/meetings/${id}`),
-        api<{ bodyHtml: string; lockedAt: string | null; updatedAt?: string }>(`/meetings/${id}/minutes`),
+        api<{ bodyHtml: string; lockedAt: string | null; updatedAt?: string }>(
+          `/meetings/${id}/minutes`,
+        ),
         api<ItemRow[]>(`/items?meetingId=${id}`).catch(() => []),
         api<MomRow>(`/meetings/${id}/mom`).catch(() => null),
         api<Annexure[]>(`/meetings/${id}/documents`).catch(() => []),
@@ -113,7 +115,9 @@ export default function MinutesPage() {
   // Generating the MoM is the next step after saving, and it was reachable
   // from nowhere in the interface — the endpoint existed, every screen said to
   // do it, and no screen offered it.
-  const unmarked = (meeting?.invitees ?? []).filter((i) => !i.attendance).map((i) => i.user.name);
+  const unmarked = (meeting?.invitees ?? [])
+    .filter((i) => !i.attendance)
+    .map((i) => i.user.name);
   const ready =
     Boolean(meeting) &&
     ['HELD', 'MINUTED', 'CLOSED'].includes(meeting?.stage ?? '') &&
@@ -183,9 +187,30 @@ export default function MinutesPage() {
         title={meeting.title}
         lede={`${formatDate(meeting.meetingDate)} · ${meeting.venue}`}
         actions={
-          <Link className="btn-ghost" href={`/meetings/${meeting.id}`}>
-            Back to the meeting
-          </Link>
+          <>
+            {/*
+             * The one action this screen leads to, in the header rather than
+             * in a column of its own. It was the only thing in a 320px side
+             * panel that the editor wanted the room of.
+             */}
+            {mom && mom.state !== 'NOT_GENERATED' ? (
+              <Link className="btn-ghost" href={`/mom?meeting=${meeting.id}`}>
+                Go to the MoM console
+              </Link>
+            ) : (
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={!caps.includes('record_minutes') || generating || !ready}
+                onClick={() => void generate()}
+              >
+                {generating ? 'Generating…' : 'Generate the draft MoM'}
+              </button>
+            )}
+            <Link className="btn-ghost" href={`/meetings/${meeting.id}`}>
+              Back to the meeting
+            </Link>
+          </>
         }
       />
 
@@ -197,254 +222,252 @@ export default function MinutesPage() {
       )}
       {!caps.includes('record_minutes') && (
         <Notice>
-          You can read these minutes, but writing them needs the <b>Record minutes</b> capability.
+          You can read these minutes, but writing them needs the <b>Record minutes</b>{' '}
+          capability.
         </Notice>
       )}
       {error && <Notice tone="red">{error}</Notice>}
 
       {/*
-        * A fixed, narrow side column rather than a proportional one.
-        *
-        * This was `1.5fr 1fr`, which gave two fifths of the page to a
-        * five-line checklist and squeezed the editor — the one thing on this
-        * screen anybody is actually working in, and the one that benefits
-        * from every pixel, since minutes are long-form prose with tables in
-        * them. The side column never needed to grow: its content is a fixed
-        * list and one button.
-        *
-        * `minmax(0, 1fr)` on the left, not plain `1fr`, so a wide table
-        * inside it scrolls within its own column instead of pushing the
-        * grid wider than the page.
-        */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="grid gap-4">
-          <Card
-            title="Discussion and decisions"
-            tag={savedAt ? `Saved ${new Date(savedAt).toLocaleTimeString()}` : 'Not saved yet'}
-          >
-            <div className="px-[17px] py-4">
-              {meeting.agenda.length > 0 && (
-                <details className="mb-3 rounded-[10px] border border-line bg-[#F9FBFD] px-3 py-2.5">
-                  <summary className="cursor-pointer text-[12px] font-semibold text-navy">
-                    The agenda, for reference ({meeting.agenda.length})
-                  </summary>
-                  <ol className="mb-0 mt-2 space-y-1 pl-5 text-[12px] text-muted">
-                    {meeting.agenda.map((a) => (
-                      <li key={a.id}>{a.text}</li>
-                    ))}
-                  </ol>
-                </details>
-              )}
+       * Why the button in the header is disabled.
+       *
+       * This has to stay visible somewhere: a greyed-out "Generate" with no
+       * reason beside it is the single most common support call a workflow
+       * screen produces, and the reason here is specific and fixable —
+       * whose attendance is missing, or that there are no minutes yet.
+       */}
+      {!ready && (!mom || mom.state === 'NOT_GENERATED') && caps.includes('record_minutes') && (
+        <Notice tone="amber">
+          <b>Not ready to generate.</b> {blocking}
+        </Notice>
+      )}
 
-              <Editor value={body} onChange={setBody} disabled={!canWrite} />
+      {/*
+       * The sequence, folded away.
+       *
+       * It was a card in a 320px column that the editor wanted the room of,
+       * and it is read once — but not worth deleting, because the last line
+       * is the rule people get wrong: nothing reaches anybody until the
+       * signed MoM is circulated. One line closed, the whole list open.
+       */}
+      <details className="mb-3 rounded-[10px] border border-line bg-white px-3.5 py-2.5">
+        <summary className="cursor-pointer text-[12.5px] font-semibold text-navy">
+          What happens after the minutes
+        </summary>
+        <ol className="mb-0 mt-2.5 space-y-2 pl-5 text-[12.5px] text-muted">
+          <li>Record attendance for everyone invited.</li>
+          <li>Generate the MoM — it needs the minutes and full attendance.</li>
+          <li>Submit it. Every action needs an owner and a date, and the minutes lock.</li>
+          <li>It is approved, signed and circulated.</li>
+          <li>
+            <b className="text-navy">Circulation is what makes the items live.</b> Until then
+            nobody has been told.
+          </li>
+        </ol>
+      </details>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                <button className="btn-primary" type="button" onClick={() => void save()} disabled={!canWrite || saving}>
-                  {saving ? 'Saving…' : 'Save the minutes'}
-                </button>
-                <span className="text-[11.5px] text-muted">
-                  Formatting is stripped to a small allow-list on save — pasting from Word keeps the
-                  structure and loses the styling, on purpose.
-                </span>
-              </div>
+      {/*
+       * One column, full width.
+       *
+       * The editor is the whole job on this screen and minutes are
+       * long-form prose with tables in them, so it gets the pane. What used
+       * to sit beside it was a fixed checklist and one button: the button is
+       * in the header now and the checklist folds away above.
+       */}
+      <div className="grid gap-4">
+        <Card
+          title="Discussion and decisions"
+          tag={savedAt ? `Saved ${new Date(savedAt).toLocaleTimeString()}` : 'Not saved yet'}
+        >
+          <div className="px-[17px] py-4">
+            {meeting.agenda.length > 0 && (
+              <details className="mb-3 rounded-[10px] border border-line bg-[#F9FBFD] px-3 py-2.5">
+                <summary className="cursor-pointer text-[12px] font-semibold text-navy">
+                  The agenda, for reference ({meeting.agenda.length})
+                </summary>
+                <ol className="mb-0 mt-2 space-y-1 pl-5 text-[12px] text-muted">
+                  {meeting.agenda.map((a) => (
+                    <li key={a.id}>{a.text}</li>
+                  ))}
+                </ol>
+              </details>
+            )}
+
+            <Editor value={body} onChange={setBody} disabled={!canWrite} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void save()}
+                disabled={!canWrite || saving}
+              >
+                {saving ? 'Saving…' : 'Save the minutes'}
+              </button>
+              <span className="text-[11.5px] text-muted">
+                Formatting is stripped to a small allow-list on save — pasting from Word keeps
+                the structure and loses the styling, on purpose.
+              </span>
             </div>
-          </Card>
+          </div>
+        </Card>
 
-          {/*
-            * Attachments belong here rather than on the meeting screen.
-            *
-            * A paper is tabled at the moment it is discussed, and the officer
-            * writing "the revised estimate was reviewed" has the file open in
-            * front of them. Asking them to finish the minutes, navigate away
-            * and upload it afterwards is how a minute ends up referring to a
-            * document nobody attached.
-            *
-            * They are listed on the MoM as numbered annexures and travel with
-            * it when it is circulated.
-            */}
-          <Card
-            title="Annexures"
-            tag={annexures.length === 0 ? 'None attached' : `${annexures.length} attached`}
-          >
-            <div className="px-[17px] py-4">
-              <p className="m-0 mb-3 text-[12.5px] text-muted">
-                Papers tabled at this meeting — estimates, drawings, presentations. They are listed
-                on the MoM as numbered annexures and are sent with it when it is circulated.
-              </p>
+        {/*
+         * Attachments belong here rather than on the meeting screen.
+         *
+         * A paper is tabled at the moment it is discussed, and the officer
+         * writing "the revised estimate was reviewed" has the file open in
+         * front of them. Asking them to finish the minutes, navigate away
+         * and upload it afterwards is how a minute ends up referring to a
+         * document nobody attached.
+         *
+         * They are listed on the MoM as numbered annexures and travel with
+         * it when it is circulated.
+         */}
+        <Card
+          title="Annexures"
+          tag={annexures.length === 0 ? 'None attached' : `${annexures.length} attached`}
+        >
+          <div className="px-[17px] py-4">
+            <p className="m-0 mb-3 text-[12.5px] text-muted">
+              Papers tabled at this meeting — estimates, drawings, presentations. They are
+              listed on the MoM as numbered annexures and are sent with it when it is
+              circulated.
+            </p>
 
-              {annexures.length === 0 ? (
-                <Empty>Nothing attached to these minutes yet.</Empty>
-              ) : (
-                <TableWrap>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>No.</th>
-                        <th>Document</th>
-                        <th>Type</th>
-                        <th>File</th>
-                        <th>Attached by</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {annexures.map((d, n) => (
-                        <tr key={d.id}>
-                          <td className="whitespace-nowrap font-mono text-[11.5px] font-semibold text-navy">
-                            A-{String(n + 1).padStart(2, '0')}
-                          </td>
-                          <td>
-                            {d.name}
-                            {d.remarks && (
-                              <small className="block text-[11px] text-muted">{d.remarks}</small>
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap">
-                            {DOCUMENT_TYPE_LABEL[d.type] ?? d.type}
-                          </td>
-                          <td>
-                            <a href={`/api/v1/files/${d.file.id}/content`} className="font-medium">
-                              {d.file.fileName}
-                            </a>
-                            <small className="ml-1.5 text-[11px] text-muted">
-                              {formatBytes(d.file.sizeBytes)}
-                            </small>
-                          </td>
-                          <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableWrap>
-              )}
-
-              {canAttach && !attaching && (
-                <button
-                  className="btn-ghost mt-3"
-                  type="button"
-                  onClick={() => setAttaching(true)}
-                >
-                  Attach a document
-                </button>
-              )}
-              {!caps.includes('manage_project_docs') && (
-                <p className="mb-0 mt-3 text-[11.5px] text-muted">
-                  Attaching needs the <b>Add project documents</b> capability.
-                </p>
-              )}
-              {caps.includes('manage_project_docs') && locked && (
-                <p className="mb-0 mt-3 text-[11.5px] text-muted">
-                  The MoM is with the approver, so the annexures are fixed too — what was approved
-                  has to be what is circulated. They unlock if it is returned.
-                </p>
-              )}
-            </div>
-          </Card>
-
-          {attaching && (
-            <DocumentUpload
-              target={`meetings/${id}`}
-              onDone={() => {
-                setAttaching(false);
-                void load();
-              }}
-              onCancel={() => setAttaching(false)}
-            />
-          )}
-
-          <Card
-            title="Entries from these minutes"
-            tag={`${items.filter((i) => i.type === 'ACTION').length} actions · ${items.filter((i) => i.type === 'CLARIFICATION').length} clarifications`}
-            actions={<ItemForm meeting={meeting} enabled={canRaise} onCreated={() => void load()} />}
-          >
-            {items.length === 0 ? (
-              <Empty>
-                Nothing raised yet. Use <b>Add entry</b> above to record an action or a
-                clarification.
-              </Empty>
+            {annexures.length === 0 ? (
+              <Empty>Nothing attached to these minutes yet.</Empty>
             ) : (
               <TableWrap>
                 <table>
                   <thead>
                     <tr>
-                      <th>Ref</th>
-                      <th>Description</th>
-                      <th>Responsible</th>
-                      <th>Due</th>
-                      <th>Status</th>
+                      <th>No.</th>
+                      <th>Document</th>
+                      <th>Type</th>
+                      <th>File</th>
+                      <th>Attached by</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((i) => (
-                      <tr key={i.id}>
+                    {annexures.map((d, n) => (
+                      <tr key={d.id}>
                         <td className="whitespace-nowrap font-mono text-[11.5px] font-semibold text-navy">
-                          {i.ref}
+                          A-{String(n + 1).padStart(2, '0')}
                         </td>
-                        <td>{i.description}</td>
                         <td>
-                          {i.type === 'ACTION'
-                            ? i.owners.map((o) => o.user.name).join(', ') || '—'
-                            : (i.respondedBy?.name ?? '—')}
+                          {d.name}
+                          {d.remarks && (
+                            <small className="block text-[11px] text-muted">{d.remarks}</small>
+                          )}
                         </td>
-                        <td className="whitespace-nowrap">{formatDate(i.dueDate)}</td>
+                        <td className="whitespace-nowrap">
+                          {DOCUMENT_TYPE_LABEL[d.type] ?? d.type}
+                        </td>
                         <td>
-                          <ItemStatusChip
-                            type={i.type}
-                            status={(i.actionStatus ?? i.clarificationStatus) as never}
-                            isActive={i.isActive}
-                          />
+                          <a
+                            href={`/api/v1/files/${d.file.id}/content`}
+                            className="font-medium"
+                          >
+                            {d.file.fileName}
+                          </a>
+                          <small className="ml-1.5 text-[11px] text-muted">
+                            {formatBytes(d.file.sizeBytes)}
+                          </small>
                         </td>
+                        <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </TableWrap>
             )}
-          </Card>
-        </div>
 
-        {/*
-          * Sticky alongside the editor: minutes run well past one screen, and
-          * "Generate the draft MoM" is the next thing the coordinator does.
-          * Having to scroll back to the top to find it is the same complaint
-          * the formatting toolbar had.
-          */}
-        <div className="grid content-start gap-4 xl:sticky xl:top-0 xl:self-start">
-          <Card title="Then what" tag="After the minutes">
-            <div className="px-[17px] py-4 text-[12.5px] text-muted">
-              <ol className="m-0 space-y-2 pl-5">
-                <li>Record attendance for everyone invited.</li>
-                <li>Generate the MoM — it needs the minutes and full attendance.</li>
-                <li>Submit it. Every action needs an owner and a date, and the minutes lock.</li>
-                <li>It is approved, signed and circulated.</li>
-                <li>
-                  <b className="text-navy">Circulation is what makes the items live.</b> Until then
-                  nobody has been told.
-                </li>
-              </ol>
-              <div className="mt-3">
-                {mom && mom.state !== 'NOT_GENERATED' ? (
-                  <Link className="btn-ghost" href={`/mom?meeting=${meeting.id}`}>
-                    Go to the MoM console
-                  </Link>
-                ) : (
-                  <button
-                    className="btn-primary"
-                    type="button"
-                    disabled={!caps.includes('record_minutes') || generating || !ready}
-                    onClick={() => void generate()}
-                  >
-                    {generating ? 'Generating…' : 'Generate the draft MoM'}
-                  </button>
-                )}
-                {!ready && (!mom || mom.state === 'NOT_GENERATED') && (
-                  <p className="mb-0 mt-2 text-[11.5px] text-muted">
-                    {blocking}
-                  </p>
-                )}
-              </div>
-            </div>
-          </Card>
-        </div>
+            {canAttach && !attaching && (
+              <button
+                className="btn-ghost mt-3"
+                type="button"
+                onClick={() => setAttaching(true)}
+              >
+                Attach a document
+              </button>
+            )}
+            {!caps.includes('manage_project_docs') && (
+              <p className="mb-0 mt-3 text-[11.5px] text-muted">
+                Attaching needs the <b>Add project documents</b> capability.
+              </p>
+            )}
+            {caps.includes('manage_project_docs') && locked && (
+              <p className="mb-0 mt-3 text-[11.5px] text-muted">
+                The MoM is with the approver, so the annexures are fixed too — what was approved
+                has to be what is circulated. They unlock if it is returned.
+              </p>
+            )}
+          </div>
+        </Card>
+
+        {attaching && (
+          <DocumentUpload
+            target={`meetings/${id}`}
+            onDone={() => {
+              setAttaching(false);
+              void load();
+            }}
+            onCancel={() => setAttaching(false)}
+          />
+        )}
+
+        <Card
+          title="Entries from these minutes"
+          tag={`${items.filter((i) => i.type === 'ACTION').length} actions · ${items.filter((i) => i.type === 'CLARIFICATION').length} clarifications`}
+          actions={
+            <ItemForm meeting={meeting} enabled={canRaise} onCreated={() => void load()} />
+          }
+        >
+          {items.length === 0 ? (
+            <Empty>
+              Nothing raised yet. Use <b>Add entry</b> above to record an action or a
+              clarification.
+            </Empty>
+          ) : (
+            <TableWrap>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ref</th>
+                    <th>Description</th>
+                    <th>Responsible</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((i) => (
+                    <tr key={i.id}>
+                      <td className="whitespace-nowrap font-mono text-[11.5px] font-semibold text-navy">
+                        {i.ref}
+                      </td>
+                      <td>{i.description}</td>
+                      <td>
+                        {i.type === 'ACTION'
+                          ? i.owners.map((o) => o.user.name).join(', ') || '—'
+                          : (i.respondedBy?.name ?? '—')}
+                      </td>
+                      <td className="whitespace-nowrap">{formatDate(i.dueDate)}</td>
+                      <td>
+                        <ItemStatusChip
+                          type={i.type}
+                          status={(i.actionStatus ?? i.clarificationStatus) as never}
+                          isActive={i.isActive}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
+        </Card>
       </div>
     </>
   );
