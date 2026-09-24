@@ -110,20 +110,27 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): Env {
     throw new Error('QUEUE_DRIVER=bullmq requires REDIS_URL.');
   }
   /*
-   * OTP may only be off while there is genuinely no way to deliver the code.
+   * OTP off is worth saying out loud on every boot, and worth no more than
+   * that.
    *
-   * The moment a real provider is configured the reason for turning it off
-   * has gone, and a second factor left switched off because nobody
-   * remembered is exactly the kind of thing that is discovered during an
-   * audit rather than before one. So the setting expires by itself: configure
-   * SMTP or a WhatsApp aggregator and the application refuses to start until
-   * OTP is turned back on.
+   * This refused to start when a provider was configured, on the reasoning
+   * that the excuse for turning OTP off had expired. That was wrong twice
+   * over. A configured provider does not mean a deliverable code — the
+   * dispatcher is P5-01 and does not exist, so nothing is sent whatever
+   * EMAIL_PROVIDER says — and more importantly it made a security preference
+   * into a reason for the API not to come up at all. A 502 is a worse
+   * outcome than a weak second factor, and it is the outcome nobody
+   * anticipates from a line in a config file.
+   *
+   * So: a warning in the log, on every start, that names what is off and
+   * what it costs. Refusing to boot belongs to settings that would lose data
+   * or leak it — an S3 bucket that is really a disposable disk — not to this.
    */
-  if (!env.OTP_REQUIRED && (env.EMAIL_PROVIDER === 'smtp' || env.WHATSAPP_PROVIDER !== 'console')) {
-    throw new Error(
-      'OTP_REQUIRED=false is only defensible while no provider can deliver the code, and ' +
-        `this deployment has one configured (EMAIL_PROVIDER=${env.EMAIL_PROVIDER}, ` +
-        `WHATSAPP_PROVIDER=${env.WHATSAPP_PROVIDER}). Set OTP_REQUIRED=true.`,
+  if (!env.OTP_REQUIRED) {
+    console.warn(
+      '[env] OTP_REQUIRED=false — sign-in is email and password only, with no second ' +
+        'factor. Anyone holding a password is in. Set OTP_REQUIRED=true once a provider ' +
+        'can deliver the code.',
     );
   }
   if (env.NODE_ENV === 'production') {
