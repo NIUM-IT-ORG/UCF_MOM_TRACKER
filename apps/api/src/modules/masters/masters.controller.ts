@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
+import { passwordDto } from '@mom/shared';
 import { MastersService } from './masters.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CapabilityGuard } from '../auth/capability.guard.js';
@@ -30,7 +31,9 @@ const createUser = z
     /** The designation as typed; external invitees only. */
     title: z.string().trim().min(2).max(120).optional(),
     seesAllProjects: z.boolean().optional(),
-    password: z.string().min(12).optional(),
+    // The same rule as a reset: twelve characters and not a breach-list
+    // favourite. One definition, so the two cannot drift.
+    password: passwordDto.optional(),
   })
   .strict()
   .refine((u) => u.designationCode === NO_LOGIN_DESIGNATION || !!u.email, {
@@ -62,6 +65,16 @@ const designationBody = z
     caps: z.array(z.string().trim().min(2)),
   })
   .strict();
+
+/**
+ * An administrator setting a password for somebody else.
+ *
+ * No `currentPassword`: the administrator does not have it, and the point of
+ * the route is that the officer cannot sign in. `passwordDto` carries the
+ * rules from docs/04-RBAC.md — at least twelve characters, and not one of
+ * the handful that are on every breach list.
+ */
+const adminSetPassword = z.object({ newPassword: passwordDto }).strict();
 
 const setProjects = z
   .object({
@@ -110,6 +123,25 @@ export class MastersController {
   @Audited({ objectType: 'USER', event: 'USER_PROJECTS_CHANGED' })
   setProjects(@Param('id') id: string, @Body() body: unknown) {
     return this.masters.setUserProjects(id, setProjects.parse(body).projects);
+  }
+
+  /**
+   * Set somebody's password.
+   *
+   * `manage_masters`, the same capability that creates the account in the
+   * first place — this cannot give anybody access they could not already
+   * grant by making a new officer. It is audited, and it revokes the target's
+   * sessions, because the usual reason for a reset is that the old password
+   * is no longer private.
+   *
+   * There is no self-service equivalent and cannot be one yet: a "forgotten
+   * password" link needs a mail provider, and Phase 5 has not been built.
+   */
+  @Post('users/:id/password')
+  @RequireCapability('manage_masters')
+  setPassword(@CurrentUser() actor: AuthUser, @Param('id') id: string, @Body() body: unknown) {
+    const { newPassword } = adminSetPassword.parse(body);
+    return this.masters.setUserPassword(actor, id, newPassword);
   }
 
   @Post('users/:id/state')

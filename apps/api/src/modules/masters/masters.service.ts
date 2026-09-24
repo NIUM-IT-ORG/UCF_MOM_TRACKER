@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { visibleUsersScope } from '../../common/scope.js';
@@ -44,6 +44,8 @@ export interface CreateUserInput {
 
 @Injectable()
 export class MastersService {
+  private readonly log = new Logger('Masters');
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ── users ────────────────────────────────────────────────────────────
@@ -225,6 +227,122 @@ export class MastersService {
         roleOnProject: true,
         project: { select: { id: true, code: true, name: true } },
       },
+    });
+  }
+
+  /**
+   * An administrator setting somebody's password.
+   *
+   * Until now `passwordHash` was written once, at creation, and never again.
+   * That left two dead ends with no way out of either: nobody could change a
+   * password, and an officer created without one could never sign in —
+   * `setAccountState('ACTIVE')` refuses an account with no password, and
+   * nothing existed that could give it one. With no mail provider there is
+   * also no self-service reset to fall back on, so an administrator doing it
+   * is the only mechanism there can be.
+   *
+   * Four things happen together, and each matters:
+   *
+   *   - the hash is replaced;
+   *   - every session that user holds is revoked, because the reason for a
+   *     reset is often that somebody else knows the old one, and leaving a
+   *     live session behind makes the reset decorative;
+   *   - the lockout is cleared, since an administrator intervening is the
+   *     answer to "locked out after five attempts";
+   *   - an audit row is written naming who did it — never the password.
+   */
+  async setUserPassword(actor: AuthUser, userId: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        accountState: true,
+        designation: { select: { code: true } },
+      },
+    });
+    if (!user) throw AppError.notFound('That user');
+
+    /*
+     * An external invitee has no login by definition — docs/01-PRD.md says so
+     * in as many words. Giving one a password would quietly turn a record
+     * that exists to be named in attendance into an account. Change the
+     * designation first if that is genuinely what is wanted; that is a
+     * decision worth making deliberately.
+     */
+    if (user.designation.code === 'EXT') {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${user.name} is an external invitee, who has no sign-in. Change their designation first if they need one.`,
+      );
+    }
+    // Captured, not read through `user` later: TypeScript does not carry a
+    // property narrowing into a closure, and this is read inside the
+    // transaction below.
+    const email = user.email;
+    if (!email) {
+      // Email is the login identifier; a password without one signs nobody in.
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${user.name} has no email address, so there is nothing to sign in with. Add one first.`,
+      );
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    return this.prisma.$transaction(async (tx) => {
+      /*
+       * INVITE_ONLY means "invited, no password yet", so setting one
+       * completes the invitation. SUSPENDED is left exactly as it is: a reset
+       * must never be a way to bring back an account somebody suspended on
+       * purpose.
+       */
+      const activating = user.accountState === 'INVITE_ONLY';
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash,
+          lockedUntil: null,
+          ...(activating ? { accountState: 'ACTIVE' } : {}),
+        },
+        select: { id: true, name: true, accountState: true },
+      });
+
+      const revoked = await tx.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'PASSWORD_RESET' },
+      });
+
+      await tx.auditEntry.create({
+        data: {
+          actorId: actor.id,
+          objectType: 'USER',
+          objectId: userId,
+          objectRef: email,
+          event: 'PASSWORD_SET',
+          detail:
+            `Password set by ${actor.name}` +
+            (activating ? ', and the account activated' : '') +
+            (revoked.count > 0 ? `; ${revoked.count} session(s) revoked` : ''),
+          // Deliberately no `after`: there is nothing about a password worth
+          // recording beyond the fact that it changed.
+        },
+      });
+
+      this.log.log(
+        `Password set for ${email} by ${actor.email}` +
+          (revoked.count > 0 ? ` — ${revoked.count} session(s) revoked` : ''),
+      );
+
+      return {
+        id: updated.id,
+        name: updated.name,
+        accountState: updated.accountState,
+        activated: activating,
+        sessionsRevoked: revoked.count,
+      };
     });
   }
 

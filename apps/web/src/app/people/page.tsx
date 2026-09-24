@@ -6,6 +6,7 @@ import { CAPABILITIES, type Capability } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { PersonForm } from './PersonForm';
+import { SetPassword } from './SetPassword';
 import { DesignationForm } from './DesignationForm';
 import { formatDate } from '@/lib/format';
 import { Avatar, Card, Empty, PageHead, ProjectTag, TableWrap, Tabs } from '@/components/ui';
@@ -59,6 +60,7 @@ export default function PeoplePage() {
     ['people', 'designations', 'departments'].includes(requested ?? '') ? requested! : 'people',
   );
   const [personForm, setPersonForm] = useState<{ person?: Person } | null>(null);
+  const [passwordFor, setPasswordFor] = useState<Person | null>(null);
   const [designationForm, setDesignationForm] = useState<{ designation?: Designation } | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
   const [designations, setDesignations] = useState<Designation[] | null>(null);
@@ -256,6 +258,20 @@ export default function PeoplePage() {
                             Edit
                           </button>
                         )}
+                        {/*
+                          * Not offered for an external invitee: they have no
+                          * sign-in by definition, and the server refuses it.
+                          * A button that always fails is worse than none.
+                          */}
+                        {canManage && p.designation.code !== 'EXT' && (
+                          <button
+                            className="btn-ghost"
+                            type="button"
+                            onClick={() => setPasswordFor(p)}
+                          >
+                            {p.accountState === 'INVITE_ONLY' ? 'Set password' : 'Reset password'}
+                          </button>
+                        )}
                         <button className="btn-ghost" type="button" onClick={() => void check(p.id)}>
                           Check access
                         </button>
@@ -355,6 +371,16 @@ export default function PeoplePage() {
             </TableWrap>
           )}
         </Card>
+      )}
+
+      {passwordFor && (
+        <SetPassword
+          person={passwordFor}
+          onClose={() => setPasswordFor(null)}
+          // Reload so the state chip stops saying "no sign-in" the moment an
+          // invited account has been given a password.
+          onDone={() => loadAll()}
+        />
       )}
 
       {checking && <EffectiveAccess effective={checking} onClose={() => setChecking(null)} />}
