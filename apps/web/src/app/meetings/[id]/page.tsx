@@ -42,6 +42,7 @@ import { MomPreview } from '@/components/MomPreview';
 import { WhoCan } from '@/components/WhoCan';
 import { DocumentUpload } from '@/components/DocumentUpload';
 import { ShareDialog } from '@/components/ShareDialog';
+import { ItemDrawer } from '@/components/ItemDrawer';
 
 const TABS = ['agenda', 'attendance', 'items', 'documents', 'mom'] as const;
 type TabKey = (typeof TABS)[number];
@@ -216,7 +217,9 @@ export default function MeetingPage() {
           onDone={() => void load()}
         />
       )}
-      {tab === 'items' && <ItemsTab meeting={meeting} items={items} />}
+      {tab === 'items' && (
+        <ItemsTab meeting={meeting} items={items} onChanged={() => void load()} />
+      )}
       {tab === 'documents' && (
         <DocumentsTab
           meetingId={meeting.id}
@@ -556,8 +559,26 @@ function AttendanceTab({
   );
 }
 
-function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[] }) {
+function ItemsTab({
+  meeting,
+  items,
+  onChanged,
+}: {
+  meeting: MeetingDetail;
+  items: ItemRow[];
+  onChanged: () => void;
+}) {
   const inert = items.filter((i) => !i.isActive).length;
+  /*
+   * The same drawer the register uses, rather than a second set of buttons.
+   *
+   * This tab showed a status and offered no way to change it, so an officer
+   * looking at the meeting an action came from had to find it again in the
+   * register to report it complete. Reusing the drawer means the transition
+   * rules — inertness, "nobody confirms their own work", who may close a
+   * clarification — are stated in exactly one place.
+   */
+  const [openItem, setOpenItem] = useState<string | null>(null);
 
   if (items.length === 0) {
     return (
@@ -592,9 +613,24 @@ function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[]
             </thead>
             <tbody>
               {items.map((i) => (
-                <tr key={i.id}>
+                <tr
+                  key={i.id}
+                  className="cursor-pointer hover:bg-[#F6F9FC]"
+                  onClick={() => setOpenItem(i.id)}
+                >
                   <td className="whitespace-nowrap font-mono text-[11.5px] font-semibold text-navy">
-                    {i.ref}
+                    {/* A button, so the row is reachable by keyboard and
+                        announced as something that opens. */}
+                    <button
+                      type="button"
+                      className="font-mono text-[11.5px] font-semibold text-navy underline-offset-2 hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenItem(i.id);
+                      }}
+                    >
+                      {i.ref}
+                    </button>
                   </td>
                   <td>
                     {i.description}
@@ -629,7 +665,18 @@ function ItemsTab({ meeting, items }: { meeting: MeetingDetail; items: ItemRow[]
             </tbody>
           </table>
         </TableWrap>
+        <p className="mb-0 px-[17px] pb-3.5 pt-1 text-[11.5px] text-muted">
+          Open one to report it complete, confirm it, send it back, or answer a clarification.
+        </p>
       </Card>
+
+      {openItem && (
+        <ItemDrawer
+          itemId={openItem}
+          onClose={() => setOpenItem(null)}
+          onChanged={onChanged}
+        />
+      )}
     </div>
   );
 }

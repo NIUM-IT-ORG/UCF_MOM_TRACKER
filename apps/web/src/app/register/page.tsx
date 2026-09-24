@@ -23,7 +23,7 @@ import {
   ProjectTag,
   TableWrap,
 } from '@/components/ui';
-import { ItemDrawer } from './ItemDrawer';
+import { ItemDrawer } from '@/components/ItemDrawer';
 import { ageing } from './ageing';
 
 /**
