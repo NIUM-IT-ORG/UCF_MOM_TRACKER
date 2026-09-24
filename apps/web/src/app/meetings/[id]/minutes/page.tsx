@@ -202,7 +202,21 @@ export default function MinutesPage() {
       )}
       {error && <Notice tone="red">{error}</Notice>}
 
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+      {/*
+        * A fixed, narrow side column rather than a proportional one.
+        *
+        * This was `1.5fr 1fr`, which gave two fifths of the page to a
+        * five-line checklist and squeezed the editor — the one thing on this
+        * screen anybody is actually working in, and the one that benefits
+        * from every pixel, since minutes are long-form prose with tables in
+        * them. The side column never needed to grow: its content is a fixed
+        * list and one button.
+        *
+        * `minmax(0, 1fr)` on the left, not plain `1fr`, so a wide table
+        * inside it scrolls within its own column instead of pushing the
+        * grid wider than the page.
+        */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="grid gap-4">
           <Card
             title="Discussion and decisions"
@@ -388,7 +402,13 @@ export default function MinutesPage() {
           </Card>
         </div>
 
-        <div className="grid content-start gap-4">
+        {/*
+          * Sticky alongside the editor: minutes run well past one screen, and
+          * "Generate the draft MoM" is the next thing the coordinator does.
+          * Having to scroll back to the top to find it is the same complaint
+          * the formatting toolbar had.
+          */}
+        <div className="grid content-start gap-4 xl:sticky xl:top-0 xl:self-start">
           <Card title="Then what" tag="After the minutes">
             <div className="px-[17px] py-4 text-[12.5px] text-muted">
               <ol className="m-0 space-y-2 pl-5">
