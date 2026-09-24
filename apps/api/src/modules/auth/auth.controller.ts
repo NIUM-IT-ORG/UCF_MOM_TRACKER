@@ -26,11 +26,34 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * The password step — and, when no second factor is configured, the whole
+   * of signing in.
+   *
+   * The response says which it was rather than leaving the client to infer it
+   * from the presence of a field: `{ otpRequired: true, challengeId }` means
+   * there is a code to enter, `{ otpRequired: false, user }` means the
+   * cookies are already set.
+   */
   @Public()
   @Post('login')
-  async login(@Body() body: unknown, @Req() req: Request) {
+  async login(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const { email, password } = loginDto.parse(body);
-    return this.auth.login(email, password, req.ip);
+    const result = await this.auth.login(email, password, req.ip);
+
+    if (!result.otpRequired) {
+      this.setCookies(res, result.session);
+      return { otpRequired: false as const, user: result.session.user };
+    }
+    return {
+      otpRequired: true as const,
+      challengeId: result.challengeId,
+      ...(result.devOtp ? { devOtp: result.devOtp } : {}),
+    };
   }
 
   @Public()

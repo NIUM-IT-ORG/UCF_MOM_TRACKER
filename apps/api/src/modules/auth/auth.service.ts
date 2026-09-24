@@ -22,11 +22,23 @@ const ARGON = {
   parallelism: 1,
 } as const;
 
-export interface LoginResult {
-  challengeId: string;
-  /** Development only: the code, so the demo does not need a mail server. */
-  devOtp?: string;
-}
+/**
+ * What the password step produces.
+ *
+ * A discriminated union rather than a bag of optionals, because the two
+ * outcomes are genuinely different: either there is a second step to do, or
+ * the officer is signed in and there are cookies to set. A caller that has to
+ * guess which by checking whether a field happens to be present is a caller
+ * that will eventually guess wrong.
+ */
+export type LoginResult =
+  | {
+      otpRequired: true;
+      challengeId: string;
+      /** Development only: the code, so the demo does not need a mail server. */
+      devOtp?: string;
+    }
+  | { otpRequired: false; session: IssuedSession };
 
 export interface IssuedSession {
   accessToken: string;
@@ -86,6 +98,34 @@ export class AuthService {
 
     await this.recordAttempt(email, user.id, true, ip);
 
+    /*
+     * No second factor configured: the password was the whole of it.
+     *
+     * The session is issued here rather than by inventing a challenge and
+     * immediately consuming it. A challenge nobody has to answer is not a
+     * factor, and pretending otherwise would put rows in `otp_challenges`
+     * that suggest a check happened.
+     */
+    /*
+     * `!== false`, not a plain truthiness check.
+     *
+     * A missing or misspelt setting then means "required" rather than "off".
+     * The failure mode of getting this the other way round is a second factor
+     * silently disappearing because a variable did not get loaded, which is
+     * not a thing anybody would notice from the outside.
+     */
+    if (this.config.get<boolean>('OTP_REQUIRED') === false) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date(), lockedUntil: null },
+      });
+      this.logger.log(`${user.email} signed in with a password only — OTP_REQUIRED is off`);
+      return {
+        otpRequired: false,
+        session: await this.issue(user.id, crypto.randomUUID(), { ip }),
+      };
+    }
+
     // A fresh challenge supersedes any earlier one, so an abandoned attempt
     // cannot be completed later by someone who saw the code.
     await this.prisma.otpChallenge.updateMany({
@@ -110,7 +150,7 @@ export class AuthService {
       this.logger.log(`OTP for ${user.email}: ${code}`);
     }
 
-    return { challengeId: challenge.id, devOtp: isProduction ? undefined : code };
+    return { otpRequired: true, challengeId: challenge.id, devOtp: isProduction ? undefined : code };
   }
 
   // ── OTP step ─────────────────────────────────────────────────────────

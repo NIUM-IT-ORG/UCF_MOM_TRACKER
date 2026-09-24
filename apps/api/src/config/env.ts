@@ -25,6 +25,26 @@ const schema = z.object({
   REFRESH_TOKEN_TTL: z.string().default('30d'),
 
   /**
+   * The one-time code on sign-in.
+   *
+   * `docs/01-PRD.md` asks for it, and it stays the default. It is switchable
+   * because the code has to reach the officer somehow, and until Phase 5
+   * delivers by e-mail and WhatsApp there is no way to send it: in production
+   * the code was generated, withheld, and delivered by nothing, so nobody
+   * could sign in at all. The alternative in use was an uncommitted patch on
+   * the server, which is worse in every way than a setting somebody can read.
+   *
+   * With this off, sign-in is email and password only — one factor. That is a
+   * real reduction, taken deliberately, and it is recorded here rather than
+   * hidden in a working tree. Turn it back on the day a provider exists; the
+   * check below makes sure nobody forgets.
+   */
+  OTP_REQUIRED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+
+  /**
    * Docker-free development: leave REDIS_URL unset and the queue runs in
    * process. BullMQ takes over the moment a URL is present, with no code change.
    */
@@ -88,6 +108,23 @@ export function loadEnv(raw: NodeJS.ProcessEnv = process.env): Env {
   }
   if (env.QUEUE_DRIVER === 'bullmq' && !env.REDIS_URL) {
     throw new Error('QUEUE_DRIVER=bullmq requires REDIS_URL.');
+  }
+  /*
+   * OTP may only be off while there is genuinely no way to deliver the code.
+   *
+   * The moment a real provider is configured the reason for turning it off
+   * has gone, and a second factor left switched off because nobody
+   * remembered is exactly the kind of thing that is discovered during an
+   * audit rather than before one. So the setting expires by itself: configure
+   * SMTP or a WhatsApp aggregator and the application refuses to start until
+   * OTP is turned back on.
+   */
+  if (!env.OTP_REQUIRED && (env.EMAIL_PROVIDER === 'smtp' || env.WHATSAPP_PROVIDER !== 'console')) {
+    throw new Error(
+      'OTP_REQUIRED=false is only defensible while no provider can deliver the code, and ' +
+        `this deployment has one configured (EMAIL_PROVIDER=${env.EMAIL_PROVIDER}, ` +
+        `WHATSAPP_PROVIDER=${env.WHATSAPP_PROVIDER}). Set OTP_REQUIRED=true.`,
+    );
   }
   if (env.NODE_ENV === 'production') {
     if (env.EMAIL_PROVIDER === 'console') {

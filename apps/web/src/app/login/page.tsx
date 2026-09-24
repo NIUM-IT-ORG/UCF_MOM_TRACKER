@@ -45,10 +45,25 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const { challengeId: id, devOtp } = await authApi.login(email, password);
-      setChallengeId(id);
-      setOtp(devOtp ?? '');
-      setHint(devOtp ? `Development build — your code is ${devOtp}` : null);
+      const result = await authApi.login(email, password);
+
+      /*
+       * No second factor on this deployment: the cookies are already set and
+       * there is no code to ask for. Showing an OTP box that accepts nothing
+       * would be worse than not showing it.
+       */
+      if (!result.otpRequired) {
+        // Fill the session before navigating, so the shell renders signed in
+        // on the first paint rather than flashing the signed-out state.
+        await refresh();
+        router.push(next.startsWith('/') ? next : '/');
+        router.refresh();
+        return;
+      }
+
+      setChallengeId(result.challengeId);
+      setOtp(result.devOtp ?? '');
+      setHint(result.devOtp ? `Development build — your code is ${result.devOtp}` : null);
       setStep('otp');
     } catch (err) {
       setError(err instanceof ApiError ? err.display : 'Something went wrong. Try again.');

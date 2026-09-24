@@ -156,8 +156,19 @@ export async function api<T>(
 }
 
 export const authApi = {
+  /**
+   * The password step — and the whole of signing in when the deployment has
+   * no second factor configured.
+   *
+   * The response says which happened rather than leaving the caller to infer
+   * it from a field being present: with `otpRequired: false` the cookies are
+   * already set and there is nothing further to do.
+   */
   login: (email: string, password: string) =>
-    api<{ challengeId: string; devOtp?: string }>('/auth/login', {
+    api<
+      | { otpRequired: true; challengeId: string; devOtp?: string }
+      | { otpRequired: false; user: SessionUser }
+    >('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),

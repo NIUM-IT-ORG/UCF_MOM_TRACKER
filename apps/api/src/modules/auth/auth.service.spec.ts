@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import argon2 from 'argon2';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AuthService, hashPassword } from './auth.service.js';
+import { AuthService, hashPassword, type LoginResult } from './auth.service.js';
 import { TokensService, hashToken } from './tokens.service.js';
 import { AppError } from '../../common/app-error.js';
 import type { PrismaService } from '../../prisma/prisma.service.js';
@@ -93,7 +93,34 @@ function makeService(fake: ReturnType<typeof makeFakePrisma>) {
   return { service: new AuthService(prisma, tokens, config), tokens };
 }
 
+/** The same fixture with the second factor switched off. */
+function makeServiceWithoutOtp(fake: ReturnType<typeof makeFakePrisma>) {
+  const config = new ConfigService({
+    JWT_ACCESS_SECRET: 'test_access_secret_at_least_16',
+    ACCESS_TOKEN_TTL: '15m',
+    REFRESH_TOKEN_TTL: '7d',
+    NODE_ENV: 'test',
+    OTP_REQUIRED: false,
+  });
+  const tokens = new TokensService(config);
+  return new AuthService(fake as unknown as PrismaService, tokens, config);
+}
+
 const PASSWORD = 'correct horse battery staple';
+
+/**
+ * Narrow the password step to the challenge it is expected to produce.
+ *
+ * `login` returns one of two shapes now — a challenge, or a session when no
+ * second factor is configured. Every test below means the first, and saying
+ * so once beats a non-null assertion at each call site: if the branch ever
+ * flips, these fail with "expected an OTP challenge" rather than with
+ * `undefined is not a string` ten lines later.
+ */
+function challenged(result: LoginResult) {
+  if (!result.otpRequired) throw new Error('expected an OTP challenge, got a session');
+  return result;
+}
 
 describe('AuthService', () => {
   let fake: ReturnType<typeof makeFakePrisma>;
@@ -120,7 +147,7 @@ describe('AuthService', () => {
 
   describe('password step', () => {
     it('issues a challenge for the right password', async () => {
-      const result = await service.login('officer.a@example.gov', PASSWORD);
+      const result = challenged(await service.login('officer.a@example.gov', PASSWORD));
       expect(result.challengeId).toBeTruthy();
       expect(result.devOtp).toMatch(/^\d{6}$/);
     });
@@ -163,7 +190,7 @@ describe('AuthService', () => {
     });
 
     it('supersedes an earlier unfinished challenge', async () => {
-      const first = await service.login('officer.a@example.gov', PASSWORD);
+      const first = challenged(await service.login('officer.a@example.gov', PASSWORD));
       await service.login('officer.a@example.gov', PASSWORD);
       const stale = fake._rows.otps.find((o) => o.id === first.challengeId) as Row;
       expect(stale.consumedAt).toBeTruthy();
@@ -172,7 +199,9 @@ describe('AuthService', () => {
 
   describe('OTP step', () => {
     it('exchanges a correct code for a session', async () => {
-      const { challengeId, devOtp } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId, devOtp } = challenged(
+        await service.login('officer.a@example.gov', PASSWORD),
+      );
       const issued = await service.verifyOtp(challengeId, devOtp!, {});
       expect(issued.accessToken).toBeTruthy();
       expect(issued.refreshToken).toBeTruthy();
@@ -180,27 +209,33 @@ describe('AuthService', () => {
     });
 
     it('refuses a wrong code and counts the attempt', async () => {
-      const { challengeId } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId } = challenged(await service.login('officer.a@example.gov', PASSWORD));
       await expect(service.verifyOtp(challengeId, '000000', {})).rejects.toThrowError(AppError);
       const challenge = fake._rows.otps.find((o) => o.id === challengeId) as Row;
       expect(challenge.attempts).toBe(1);
     });
 
     it('will not accept the same code twice', async () => {
-      const { challengeId, devOtp } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId, devOtp } = challenged(
+        await service.login('officer.a@example.gov', PASSWORD),
+      );
       await service.verifyOtp(challengeId, devOtp!, {});
       await expect(service.verifyOtp(challengeId, devOtp!, {})).rejects.toThrowError(AppError);
     });
 
     it('refuses an expired code', async () => {
-      const { challengeId, devOtp } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId, devOtp } = challenged(
+        await service.login('officer.a@example.gov', PASSWORD),
+      );
       const challenge = fake._rows.otps.find((o) => o.id === challengeId) as Row;
       challenge.expiresAt = new Date(Date.now() - 1000);
       await expect(service.verifyOtp(challengeId, devOtp!, {})).rejects.toThrowError(AppError);
     });
 
     it('gives up after five wrong codes rather than allowing a brute force', async () => {
-      const { challengeId, devOtp } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId, devOtp } = challenged(
+        await service.login('officer.a@example.gov', PASSWORD),
+      );
       for (let i = 0; i < 5; i += 1) {
         await service.verifyOtp(challengeId, '000000', {}).catch(() => undefined);
       }
@@ -211,7 +246,9 @@ describe('AuthService', () => {
 
   describe('refresh rotation', () => {
     async function signIn() {
-      const { challengeId, devOtp } = await service.login('officer.a@example.gov', PASSWORD);
+      const { challengeId, devOtp } = challenged(
+        await service.login('officer.a@example.gov', PASSWORD),
+      );
       return service.verifyOtp(challengeId, devOtp!, {});
     }
 
@@ -290,5 +327,90 @@ describe('password hashing', () => {
     expect(hash.startsWith('$argon2id$')).toBe(true);
     expect(await argon2.verify(hash, PASSWORD)).toBe(true);
     expect(await argon2.verify(hash, 'something else')).toBe(false);
+  });
+});
+
+/**
+ * Sign-in with no second factor.
+ *
+ * Switched off deliberately while no provider can deliver a code — until
+ * Phase 5 the code was generated, withheld and sent by nothing, so nobody
+ * could sign in to production at all. The setting is what makes that visible;
+ * these tests are what stop it drifting.
+ */
+describe('OTP_REQUIRED=false', () => {
+  let fake: ReturnType<typeof makeFakePrisma>;
+  let service: AuthService;
+
+  beforeEach(async () => {
+    fake = makeFakePrisma();
+    service = makeServiceWithoutOtp(fake);
+    fake._rows.users.push({
+      id: 'u1',
+      name: 'Officer A',
+      initials: 'OA',
+      email: 'officer.a@example.gov',
+      passwordHash: await hashPassword(PASSWORD),
+      accountState: 'ACTIVE',
+      lockedUntil: null,
+      seesAllProjects: true,
+      designation: {
+        code: 'MD',
+        name: 'Mission Director',
+        band: 'Executive',
+        caps: ['approve_mom'],
+      },
+      department: { id: 'd1', name: 'UCF Head Office' },
+      projects: [],
+    });
+  });
+
+  it('signs the officer in on the password alone', async () => {
+    const result = await service.login('officer.a@example.gov', PASSWORD);
+    expect(result.otpRequired).toBe(false);
+    if (result.otpRequired) throw new Error('unreachable');
+    expect(result.session.accessToken).toBeTruthy();
+    expect(result.session.refreshToken).toBeTruthy();
+    expect(result.session.user.designation.code).toBe('MD');
+  });
+
+  /*
+   * A challenge nobody has to answer is not a factor. Writing one would leave
+   * rows in otp_challenges suggesting a check happened, which is worse than
+   * the honest absence of them.
+   */
+  it('writes no challenge at all', async () => {
+    const before = fake._rows.otps.length;
+    await service.login('officer.a@example.gov', PASSWORD);
+    expect(fake._rows.otps.length).toBe(before);
+  });
+
+  it('records the sign-in, so the audit is not quieter than before', async () => {
+    await service.login('officer.a@example.gov', PASSWORD);
+    const user = fake._rows.users[0] as Row;
+    expect(user.lastLoginAt).toBeInstanceOf(Date);
+  });
+
+  /* Turning the factor off must not turn the first one off with it. */
+  it('still refuses the wrong password', async () => {
+    await expect(service.login('officer.a@example.gov', 'wrong')).rejects.toThrowError(AppError);
+  });
+
+  it('still refuses an account that cannot sign in', async () => {
+    fake._rows.users.push({
+      id: 'u13',
+      email: 'banker.1@example.gov',
+      passwordHash: null,
+      accountState: 'INVITE_ONLY',
+      lockedUntil: null,
+    });
+    await expect(service.login('banker.1@example.gov', PASSWORD)).rejects.toThrowError(AppError);
+  });
+
+  it('still locks the account after five failures', async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await service.login('officer.a@example.gov', 'wrong').catch(() => undefined);
+    }
+    expect((fake._rows.users[0] as Row).lockedUntil).toBeInstanceOf(Date);
   });
 });
