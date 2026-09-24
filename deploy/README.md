@@ -6,6 +6,19 @@ certificate; the API and the web app as ordinary systemd services.
 
 Nothing here needs Docker, and nothing needs a managed AWS service beyond S3.
 
+> **What is actually running, as of 24 September 2026.** The server was not
+> built the way sections 1-4 below describe. There is no `mom` service user and
+> no `/opt/mom/app`; the checkout is at **`/var/www/ucfmom`** with its `.env`
+> beside it, and the two processes run under **pm2** as `ucfmom-api` and
+> `ucfmom-web` rather than as systemd units. `deploy/deploy.sh` matches that,
+> and defaults to it. **Releasing a change is section 5 and nothing else** —
+> the provisioning steps describe a machine that was never provisioned this
+> way, and following them produces `sudo: user 'mom' not found`.
+>
+> They are left in place because they are a coherent alternative and the next
+> environment may well be built that way. Read them as a proposal, not as a
+> description.
+
 | | |
 |---|---|
 | Region | Asia Pacific (Hyderabad), `ap-south-2` |
@@ -126,21 +139,51 @@ government document gets the real seal or none, never a placeholder.
 
 ## 5. Deploy
 
+Releasing a change on the live server is one command:
+
 ```bash
-sudo chown -R mom:mom /opt/mom/app
-sudo -u mom /opt/mom/app/deploy/deploy.sh
+cd /var/www/ucfmom && ./deploy/deploy.sh --pull
 ```
 
-Install, build, migrate, restart, then curl both services until they answer.
-If either does not come up it prints the last 40 log lines and exits non-zero.
+Install, build, migrate, restart both pm2 processes, then curl each until it
+answers. If either does not come up it prints that process's last 40 lines and
+exits non-zero.
 
-The order is build → migrate → restart, so the old version keeps serving until
-the new one is ready and a failed build is not an outage.
+The order is **build → migrate → restart**, so the old version keeps serving
+while the new one is built, a failed build is not an outage, and the window in
+which running code is older than the schema beneath it is as short as it can
+be.
 
-To release a later change:
+Without `--pull` it deploys whatever is already checked out.
+
+### Local modifications on the server
+
+`--pull` uses `git pull --rebase --autostash`. It does **not** hard-reset.
+
+That is deliberate: this server carries a deliberate uncommitted change, and a
+reset would delete it silently — the first anybody would know is a behaviour
+quietly reverting in production. Autostash is the stash / pull / pop sequence
+done by hand, without the step somebody forgets.
+
+If the rebase conflicts, the deployment stops before touching anything, and
+the local change is still in the stash:
 
 ```bash
-sudo -u mom /opt/mom/app/deploy/deploy.sh --pull
+git stash list && git stash pop
+```
+
+Anything carried this way should be an entry in `config/env.ts` and
+`.env.example` instead, so it is visible, reviewable and switchable. A change
+that exists only in a server's working tree is one failed `pop` away from
+disappearing, and nothing in the repository records that it was ever there.
+
+### Overriding the defaults
+
+Every path and process name is an environment variable, because the next
+environment will differ again:
+
+```bash
+APP_DIR=/srv/ucf ENV_FILE=/etc/ucf.env API_PROC=api WEB_PROC=web ./deploy/deploy.sh --pull
 ```
 
 ## 6. Seed the first administrator
@@ -220,13 +263,16 @@ for roughly ₹1,700 a month.
 
 ## Day to day
 
+These are for the server as it actually runs — pm2 at `/var/www/ucfmom`.
+
 ```bash
-journalctl -u mom-api -f                    # API logs, live
-journalctl -u mom-web -n 100                # web app
+pm2 status                                  # both processes, at a glance
+pm2 logs ucfmom-api                         # API logs, live
+pm2 logs ucfmom-web --lines 100 --nostream  # web app, last 100
 sudo tail -f /var/log/nginx/mom.access.log  # requests
 
-sudo systemctl restart mom-api              # restart one service
-sudo -u mom /opt/mom/app/deploy/deploy.sh   # rebuild and restart both
+pm2 restart ucfmom-api                      # restart one process
+cd /var/www/ucfmom && ./deploy/deploy.sh    # rebuild and restart both
 sudo certbot renew --dry-run                # certificate renewal works
 
 sudo -u postgres psql mom_tracker           # a database prompt
@@ -238,12 +284,13 @@ free -m                                     # memory
 
 | Symptom | First thing to check |
 |---|---|
-| 502 from nginx | `systemctl status mom-web mom-api` — one of them is down |
-| "Request failed (500)" on sign-in | `journalctl -u mom-api -n 50`; usually the database |
-| Uploads fail | The instance role and the bucket name. `aws s3 ls s3://BUCKET/files/` as the `mom` user |
-| The MoM prints without the crest | `/opt/mom/var/branding/emblem.png` is missing or unreadable by `mom` |
+| 502 from nginx | `pm2 status` — one of the two is stopped or errored |
+| "Request failed (500)" on sign-in | `pm2 logs ucfmom-api --lines 50 --nostream`; usually the database |
+| Uploads fail | The instance role and the bucket name. `aws s3 ls s3://BUCKET/files/` |
+| The MoM prints without the crest | `var/branding/emblem.png` under the checkout is missing or unreadable |
 | Site is slow at month end | `free -m`. If swap is being used heavily, the box wants 8 GB |
 | Deployment failed | It printed the log lines and did not restart. The old version is still serving |
+| The PDF will not open | No browser on the server to print with. `snap install chromium`, or set `MOM_BROWSER_PATH` |
 
 There is also `pnpm doctor`, which checks migrations against the live schema,
 every Prisma field against the real columns, and then performs four writes and
