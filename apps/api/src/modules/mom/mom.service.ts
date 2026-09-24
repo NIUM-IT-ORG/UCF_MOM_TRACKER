@@ -544,17 +544,37 @@ export class MomService {
       // 1 · circulation activates the items
       const items = await tx.item.findMany({
         where: { meetingId, activatedAt: null },
-        select: { id: true, ref: true, type: true, description: true, dueDate: true, owners: { select: { userId: true } }, respondedById: true },
+        select: {
+          id: true,
+          ref: true,
+          type: true,
+          description: true,
+          dueDate: true,
+          owners: { select: { userId: true } },
+          respondedById: true,
+          // Needed to tell a clarification still waiting for an answer from
+          // one already settled in the meeting.
+          clarificationStatus: true,
+        },
       });
 
       const now = new Date();
+      /*
+       * Activation sets `activatedAt` and nothing else.
+       *
+       * It used to stamp the opening status too — IN_PROGRESS on actions,
+       * OPEN on clarifications. That was redundant, because the status is set
+       * at creation and nothing can move it before activation, and it became
+       * wrong the moment a clarification could be answered in the meeting
+       * itself: circulating the MoM reset it to OPEN and threw away the fact
+       * that it had been settled in the room.
+       *
+       * Status says what happened. `activatedAt` says whether anybody has
+       * been told. Activation only ever had business with the second.
+       */
       await tx.item.updateMany({
-        where: { meetingId, activatedAt: null, type: 'ACTION' },
-        data: { activatedAt: now, actionStatus: 'IN_PROGRESS' },
-      });
-      await tx.item.updateMany({
-        where: { meetingId, activatedAt: null, type: 'CLARIFICATION' },
-        data: { activatedAt: now, clarificationStatus: 'OPEN' },
+        where: { meetingId, activatedAt: null },
+        data: { activatedAt: now },
       });
 
       // 2 · ACT-01 once per responsible officer
@@ -577,7 +597,16 @@ export class MomService {
           tx,
         );
       }
-      for (const item of items.filter((i) => i.type === 'CLARIFICATION' && i.respondedById)) {
+      /*
+       * CLA-01 asks the named officer to answer, so it goes only to the ones
+       * still waiting for an answer. A clarification settled in the meeting
+       * is circulated as part of the record, not as a request — sending its
+       * responder "please answer this" about a question they answered in the
+       * room is how a system teaches people to ignore its mail.
+       */
+      for (const item of items.filter(
+        (i) => i.type === 'CLARIFICATION' && i.respondedById && i.clarificationStatus === 'OPEN',
+      )) {
         await this.events.emit(
           {
             eventCode: 'CLA-01',

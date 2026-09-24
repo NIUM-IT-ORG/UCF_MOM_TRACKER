@@ -244,11 +244,43 @@ export class ItemsService {
                 }
               : {
                   respondedById: dto.respondedById ?? null,
-                  clarificationStatus: 'OPEN',
+                  /*
+                   * Answered in the room, or still to be answered.
+                   *
+                   * The opening status, exactly as with an action — and
+                   * `activatedAt` still stays null, so a clarification
+                   * settled in the meeting is no less inert than any other
+                   * item until the signed MoM is circulated. Status says what
+                   * happened; `activatedAt` says whether anybody has been
+                   * told. Those are different questions and this service
+                   * never confuses them.
+                   */
+                  clarificationStatus: dto.response ? 'RESPONDED' : 'OPEN',
                 }),
           },
           select: ITEM_SELECT,
         });
+
+        /*
+         * The answer itself goes in the item's history, not just its status.
+         *
+         * A clarification that reads RESPONDED without the response recorded
+         * is worse than one that reads OPEN: the minute asserts a question
+         * was settled and cannot say with what. `fromStatus: null` because
+         * there was no earlier state — it opened here.
+         */
+        if (dto.type === 'CLARIFICATION' && dto.response) {
+          await this.prisma.itemUpdate.create({
+            data: {
+              itemId: created.id,
+              actorId: dto.respondedById ?? user.id,
+              fromStatus: null,
+              toStatus: 'RESPONDED',
+              note: dto.response,
+            },
+          });
+        }
+
         return decorate(created);
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;

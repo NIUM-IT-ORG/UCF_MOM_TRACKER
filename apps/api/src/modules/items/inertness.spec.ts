@@ -50,8 +50,18 @@ describe('creating an item', () => {
     expect(service).not.toMatch(/actionStatus: null/);
   });
 
-  it('gives a clarification its opening status', () => {
-    expect(service).toMatch(/clarificationStatus: 'OPEN'/);
+  /*
+   * The opening status is now a choice rather than a constant: a
+   * clarification answered in the meeting itself opens at RESPONDED, because
+   * the MoM is generated before circulation and printing "Open" against a
+   * question settled in front of everybody is a minute misreporting its own
+   * meeting.
+   *
+   * What the constraint cares about is unchanged, and is what this asserts:
+   * whichever branch is taken, a real status is written and never null.
+   */
+  it('gives a clarification its opening status — Open, or Responded if it was answered', () => {
+    expect(service).toMatch(/clarificationStatus: dto\.response \? 'RESPONDED' : 'OPEN'/);
     expect(service).not.toMatch(/clarificationStatus: null/);
   });
 

@@ -69,6 +69,17 @@ export function ItemForm({
    * blank nobody fills.
    */
   const [raisedById, setRaisedById] = useState('');
+  /*
+   * Plenty of clarifications are raised and settled in the room.
+   *
+   * Without this the minute could only record such a question as Open — and
+   * since a clarification cannot be answered until the MoM is circulated, and
+   * the MoM is generated before circulation, the document printed "Open"
+   * against something answered in front of everybody. The status is on the
+   * page, so that is a minute misreporting its own meeting.
+   */
+  const [answered, setAnswered] = useState(false);
+  const [answer, setAnswer] = useState('');
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +117,8 @@ export function ItemForm({
     setDueDate('');
     setResponder([]);
     setAgendaItemId('');
+    setAnswered(false);
+    setAnswer('');
     setRaisedById(user?.id ?? '');
     setTouched(false);
   }
@@ -116,6 +129,14 @@ export function ItemForm({
     setDone(null);
     if (description.trim().length < 5) return;
     if (type === 'ACTION' && (owners.length === 0 || !dueDate)) return;
+    /*
+     * A clarification marked answered has to say what the answer was and who
+     * gave it. The server refuses it either way; stopping here means the
+     * officer is told beside the field rather than by a banner after a round
+     * trip. "Responded" with no response on a signed minute is worse than
+     * "Open" — it asserts something was settled and cannot say with what.
+     */
+    if (type === 'CLARIFICATION' && answered && (!answer.trim() || !responder[0])) return;
 
     setBusy(true);
     try {
@@ -131,9 +152,12 @@ export function ItemForm({
           ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
           ...(type === 'ACTION'
             ? { ownerIds: owners, dueDate, priority }
-            : responder[0]
-              ? { respondedById: responder[0] }
-              : {}),
+            : {
+                ...(responder[0] ? { respondedById: responder[0] } : {}),
+                // Sent only when it really was answered in the room; the
+                // server opens the item at Responded when it is present.
+                ...(answered && answer.trim() ? { response: answer.trim() } : {}),
+              }),
         }),
       });
       onCreated();
@@ -358,15 +382,59 @@ export function ItemForm({
                   </div>
                 </>
               ) : (
-                <Field label="Who should answer" hint="Can be left open and nominated later.">
-                  <OfficerPicker
-                    people={people}
-                    selected={responder}
-                    onChange={setResponder}
-                    multiple={false}
-                    projectId={projectId}
-                  />
-                </Field>
+                <>
+                  <Field
+                    label={answered ? 'Who answered it' : 'Who should answer'}
+                    required={answered}
+                    hint={
+                      answered
+                        ? 'The minute has to say who gave the answer.'
+                        : 'Can be left open and nominated later.'
+                    }
+                  >
+                    <OfficerPicker
+                      people={people}
+                      selected={responder}
+                      onChange={setResponder}
+                      multiple={false}
+                      projectId={projectId}
+                      invalid={touched && answered && !responder[0]}
+                    />
+                  </Field>
+
+                  <div className="rounded-[10px] border border-line bg-[#F8FAFD] px-3.5 py-3">
+                    <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px]">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={answered}
+                        onChange={(e) => setAnswered(e.target.checked)}
+                      />
+                      <span>
+                        <b className="text-navy">It was answered in the meeting</b>
+                        <small className="mt-0.5 block text-[11.5px] text-muted">
+                          The minutes will show it as <b>Responded</b> rather than Open. Closing
+                          it stays with the officer who raised it.
+                        </small>
+                      </span>
+                    </label>
+
+                    {answered && (
+                      <div className="mt-3">
+                        <Field label="The answer" required>
+                          <textarea
+                            className={`i min-h-[72px] ${
+                              touched && !answer.trim() ? 'border-[#D98C7F] bg-[#FEF8F7]' : ''
+                            }`}
+                            value={answer}
+                            onChange={(e) => setAnswer(e.target.value)}
+                            placeholder="What was said in reply"
+                          />
+                        </Field>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               <Field label="Remarks">

@@ -36,13 +36,39 @@ export const createClarificationDto = z
     type: z.literal('CLARIFICATION'),
     ...base,
     respondedById: cuid.optional(),
+    /**
+     * The answer, when it was given in the meeting itself.
+     *
+     * Plenty of clarifications are raised and settled in the room. Without
+     * this the item could only be recorded as OPEN, and since a clarification
+     * cannot be answered until the MoM is circulated — and the MoM is
+     * generated before circulation — the minutes printed "Open" against a
+     * question that had already been answered in front of everybody. The
+     * status is on the document, so that is a minute that misreports its own
+     * meeting.
+     *
+     * Supplying it opens the item at RESPONDED instead. It does not close it:
+     * `docs/05` gives that to the officer who raised it, and accepting on
+     * their behalf is not ours to do.
+     */
+    response: z.string().trim().min(3, 'record what the answer was').optional(),
   })
   .strict();
 
-export const createItemDto = z.discriminatedUnion('type', [
-  createActionDto,
-  createClarificationDto,
-]);
+/*
+ * The refinement sits on the union, not on the clarification member: a
+ * `.refine()` produces a ZodEffects, and `discriminatedUnion` takes objects
+ * only — putting it on the member throws at module load rather than failing
+ * a test.
+ */
+export const createItemDto = z
+  .discriminatedUnion('type', [createActionDto, createClarificationDto])
+  .refine((i) => i.type !== 'CLARIFICATION' || !i.response || !!i.respondedById, {
+    // Without a name the minute says an answer was given and cannot say by
+    // whom, which is exactly the gap a minute exists to close.
+    message: 'Name who answered it.',
+    path: ['respondedById'],
+  });
 export type CreateItemDto = z.infer<typeof createItemDto>;
 
 export const updateItemDto = z
