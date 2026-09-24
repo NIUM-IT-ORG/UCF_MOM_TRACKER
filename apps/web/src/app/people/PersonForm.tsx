@@ -255,7 +255,7 @@ export function PersonForm({
           <Field
             label="Password"
             error={fieldErrors.password}
-            hint="Leave it empty for someone who should never sign in — an external invitee who only needs notifications. At least 12 characters otherwise."
+            hint="Leave it empty for someone who should never sign in — an external invitee who only needs notifications. At least 6 characters otherwise."
           >
             <input
               className="i"

@@ -111,7 +111,11 @@ confirm(@Param('id') id: string, @CurrentUser() user: AuthUser) { … }
 
 ## 6 · Authentication
 
-- Password + OTP for officers with a login. Argon2id, minimum 12 characters, breach-list check on set.
+- Password + OTP for officers with a login. Argon2id, minimum 6 characters, breach-list check on set.
+  - The minimum was 12 and was lowered to 6 on the client's instruction. What carries the weight
+    at that length is the lockout: five failed attempts freezes the account, so online guessing
+    gets five tries. It matters more than it did, because `OTP_REQUIRED=false` on the live
+    deployment and the password is the only factor until a provider can deliver a code.
 - Access token 15 minutes, refresh token 7 days, both httpOnly, SameSite=Strict, Secure.
 - Refresh rotation with reuse detection: a replayed refresh token invalidates the whole family and writes an audit entry.
 - Five failed attempts locks the account for 15 minutes; the lock is audited.

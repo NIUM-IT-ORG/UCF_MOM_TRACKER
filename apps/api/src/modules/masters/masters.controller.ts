@@ -31,7 +31,7 @@ const createUser = z
     /** The designation as typed; external invitees only. */
     title: z.string().trim().min(2).max(120).optional(),
     seesAllProjects: z.boolean().optional(),
-    // The same rule as a reset: twelve characters and not a breach-list
+    // The same rule as a reset: the shared minimum, and not a breach-list
     // favourite. One definition, so the two cannot drift.
     password: passwordDto.optional(),
   })
@@ -71,8 +71,8 @@ const designationBody = z
  *
  * No `currentPassword`: the administrator does not have it, and the point of
  * the route is that the officer cannot sign in. `passwordDto` carries the
- * rules from docs/04-RBAC.md — at least twelve characters, and not one of
- * the handful that are on every breach list.
+ * rules from docs/04-RBAC.md — the minimum length, and not one of the
+ * handful that are on every breach list.
  */
 const adminSetPassword = z.object({ newPassword: passwordDto }).strict();
 

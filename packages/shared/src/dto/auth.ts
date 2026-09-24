@@ -18,9 +18,18 @@ export const verifyOtpDto = z
 export type VerifyOtpDto = z.infer<typeof verifyOtpDto>;
 
 /**
- * Minimum twelve characters, per docs/04-RBAC.md §6. Length beats character
- * classes — a rule demanding one of each mostly produces Password1! — so the
- * only other requirement is that it is not one of the obvious ones.
+ * Minimum six characters, per docs/04-RBAC.md section 6.
+ *
+ * It was twelve, and was lowered on the client's instruction. Length beats
+ * character classes — a rule demanding one of each mostly produces
+ * Password1! — so the only other requirement is still that it is not one of
+ * the obvious ones, and at six that list finally does some work: `password`
+ * used to be rejected for being short before the list was ever consulted.
+ *
+ * What makes six survivable is the lockout. Five failed attempts freezes the
+ * account, so an online guessing attack gets five tries rather than millions.
+ * That matters more here than it used to, because OTP_REQUIRED is off on this
+ * deployment and the password is the only factor there is.
  */
 const OBVIOUS = new Set([
   'password',
@@ -32,9 +41,12 @@ const OBVIOUS = new Set([
   'letmein12345',
 ]);
 
+/** One definition, so a form and the server cannot disagree about the rule. */
+export const PASSWORD_MIN_LENGTH = 6;
+
 export const passwordDto = z
   .string()
-  .min(12, 'use at least 12 characters')
+  .min(PASSWORD_MIN_LENGTH, `use at least ${PASSWORD_MIN_LENGTH} characters`)
   .max(128)
   .refine((p) => !OBVIOUS.has(p.toLowerCase()), 'that password is on every breach list');
 

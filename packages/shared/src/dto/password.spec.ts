@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { passwordDto } from './auth.js';
+import { PASSWORD_MIN_LENGTH, passwordDto } from './auth.js';
 
 /**
- * The rule from `docs/04-RBAC.md`: "Argon2id, minimum 12 characters,
+ * The rule from `docs/04-RBAC.md`: "Argon2id, minimum 6 characters,
  * breach-list check on set."
  *
  * It is pinned here because there are now two places a password is set — at
@@ -15,33 +15,34 @@ describe('the password rule', () => {
     expect(passwordDto.safeParse('harbour-lantern-marigold-42').success).toBe(true);
   });
 
-  it('refuses anything under twelve characters', () => {
-    expect(passwordDto.safeParse('short1234').success).toBe(false);
-    // Eleven, to pin the boundary rather than a comfortable distance from it.
-    expect(passwordDto.safeParse('elevenchar1').success).toBe(false);
-    expect(passwordDto.safeParse('twelvechars1').success).toBe(true);
+  it('refuses anything under the minimum', () => {
+    expect(PASSWORD_MIN_LENGTH).toBe(6);
+    // The boundary itself, not a comfortable distance either side of it.
+    expect(passwordDto.safeParse('abc12').success).toBe(false);
+    expect(passwordDto.safeParse('abc123').success).toBe(true);
   });
 
   /*
-   * The real entries, not a guess at them — a test that skips when it does
-   * not match is not a test.
+   * The real entries, not a guess at them.
    *
-   * Only the ones twelve characters or longer reach this rule. `password`,
-   * `password123` and `passw0rd123` are also on the list and are refused,
-   * but by the length check, which runs first — they are unreachable as
-   * breach-list entries and could be dropped without changing any outcome.
+   * Every one of them now reaches this rule. At a minimum of twelve, three
+   * of the list — `password`, `password123`, `passw0rd123` — were rejected
+   * for being short before the list was ever consulted, so they never did
+   * anything. Lowering the floor to six is what put them to work.
    */
   it('refuses the handful everybody tries first', () => {
-    for (const p of ['letmein12345', '123456789012', 'qwertyuiop12', 'administrator']) {
+    for (const p of [
+      'password',
+      'password123',
+      'passw0rd123',
+      'letmein12345',
+      '123456789012',
+      'qwertyuiop12',
+      'administrator',
+    ]) {
       const r = passwordDto.safeParse(p);
       expect(r.success, p).toBe(false);
       if (!r.success) expect(r.error.issues[0]?.message).toMatch(/breach list/);
-    }
-  });
-
-  it('refuses the short ones too, by length rather than by list', () => {
-    for (const p of ['password', 'password123', 'passw0rd123']) {
-      expect(passwordDto.safeParse(p).success, p).toBe(false);
     }
   });
 

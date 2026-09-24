@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PASSWORD_MIN_LENGTH } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { Modal } from '@/components/Modal';
 import { Field, Notice } from '@/components/ui';
@@ -33,15 +34,15 @@ export function SetPassword({
   const [done, setDone] = useState<{ activated: boolean; sessionsRevoked: number } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const tooShort = password.trim().length > 0 && password.trim().length < 12;
-  const ready = password.trim().length >= 12;
+  const tooShort = password.trim().length > 0 && password.trim().length < PASSWORD_MIN_LENGTH;
+  const ready = password.trim().length >= PASSWORD_MIN_LENGTH;
 
   /**
    * A suggestion, so the usual case is one click and not one invention.
    *
-   * Four words and a number: long enough to satisfy the rule comfortably,
-   * and possible to read down a telephone without spelling every character,
-   * which is how these are actually handed over.
+   * Three words and a number. Well past the minimum on purpose: the rule is
+   * the floor, not the target, and this is read down a telephone rather than
+   * typed from a password manager.
    */
   function suggest() {
     const words = [
@@ -151,7 +152,7 @@ export function SetPassword({
         <Field
           label="New password"
           required
-          error={tooShort ? 'At least twelve characters.' : null}
+          error={tooShort ? `At least ${PASSWORD_MIN_LENGTH} characters.` : null}
           hint="Shown, not hidden — you have to read it out to hand it over."
         >
           <div className="flex gap-2">
