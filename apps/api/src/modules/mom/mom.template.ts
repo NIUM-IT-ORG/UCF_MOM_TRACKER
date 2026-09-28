@@ -206,7 +206,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
     data.agenda.length === 0
       ? '<p class="lede">No agenda was recorded for this meeting.</p>'
       : `<table class="grid">
-    <thead><tr><th class="n">#</th><th>Agenda item</th><th>Project</th><th>Raised by</th></tr></thead>
+    <thead><tr><th class="n">#</th><th>Agenda item</th><th>Project</th></tr></thead>
     <tbody>
       ${data.agenda
         .map(
@@ -220,7 +220,6 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
                   : ''
             }</td>
             <td>${esc(a.projectName ?? '—')}</td>
-            <td>${esc(a.isCarryBlock ? 'System' : (a.addedByName ?? '—'))}</td>
           </tr>`,
         )
         .join('')}

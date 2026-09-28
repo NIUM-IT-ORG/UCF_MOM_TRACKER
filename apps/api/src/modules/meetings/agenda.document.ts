@@ -46,6 +46,7 @@ export class AgendaDocumentService {
         vcLink: true,
         agendaFreezeAt: true,
         confirmedAt: true,
+        agendaAmendedAt: true,
         cancelledReason: true,
         chair: {
           select: { id: true, name: true, title: true, designation: { select: { name: true } } },
@@ -73,7 +74,6 @@ export class AgendaDocumentService {
             ordinal: true,
             text: true,
             projectId: true,
-            addedById: true,
             isCarryBlock: true,
             isDeferred: true,
             carriedItems: {
@@ -104,24 +104,17 @@ export class AgendaDocumentService {
     });
     if (!meeting) throw AppError.notFound('That meeting');
 
-    // Agenda points name who raised them and the project they belong to —
-    // both need a lookup, so do it once rather than per row.
+    // Agenda points name the project they belong to, so resolve those once
+    // rather than per row. The lookup of who added each point went with the
+    // column that printed it.
     const projectIds = [
       ...new Set(meeting.agenda.map((a) => a.projectId).filter(Boolean)),
     ] as string[];
-    const addedByIds = [...new Set(meeting.agenda.map((a) => a.addedById))];
-    const [projects, people] = await Promise.all([
-      this.prisma.project.findMany({
-        where: { id: { in: projectIds } },
-        select: { id: true, name: true },
-      }),
-      this.prisma.user.findMany({
-        where: { id: { in: addedByIds } },
-        select: { id: true, name: true },
-      }),
-    ]);
+    const projects = await this.prisma.project.findMany({
+      where: { id: { in: projectIds } },
+      select: { id: true, name: true },
+    });
     const projectName = new Map(projects.map((p) => [p.id, p.name]));
-    const personName = new Map(people.map((p) => [p.id, p.name]));
 
     const data: AgendaDocumentData = {
       meeting: {
@@ -147,13 +140,13 @@ export class AgendaDocumentService {
           : null,
         agendaFreezeAt: meeting.agendaFreezeAt,
         confirmedAt: meeting.confirmedAt,
+        agendaAmendedAt: meeting.agendaAmendedAt,
         cancelledReason: meeting.cancelledReason,
       },
       items: meeting.agenda.map((a) => ({
         ordinal: a.ordinal,
         text: a.text,
         projectName: a.projectId ? (projectName.get(a.projectId) ?? null) : null,
-        addedByName: personName.get(a.addedById) ?? null,
         isCarryBlock: a.isCarryBlock,
         isDeferred: a.isDeferred,
         carried: a.carriedItems.map((c) => ({

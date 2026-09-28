@@ -207,7 +207,12 @@ export default function MeetingPage() {
       />
 
       {tab === 'agenda' && (
-        <AgendaTab meeting={meeting} canShare={caps.includes('share_object')} />
+        <AgendaTab
+          meeting={meeting}
+          canShare={caps.includes('share_object')}
+          canEdit={caps.includes('add_agenda')}
+          onChanged={() => void load()}
+        />
       )}
       {tab === 'attendance' && (
         <AttendanceTab
@@ -240,8 +245,74 @@ export default function MeetingPage() {
   );
 }
 
-function AgendaTab({ meeting, canShare }: { meeting: MeetingDetail; canShare: boolean }) {
+function AgendaTab({
+  meeting,
+  canShare,
+  canEdit,
+  onChanged,
+}: {
+  meeting: MeetingDetail;
+  canShare: boolean;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
   const [sharing, setSharing] = useState(false);
+  const [newPoint, setNewPoint] = useState('');
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /*
+   * The agenda closes for good once the meeting has been held: from then on
+   * it is the record of what was taken, and section 2 of the MoM reproduces
+   * it. Anything thought of afterwards belongs in the minutes.
+   */
+  const held = ['HELD', 'MINUTED', 'CLOSED', 'CANCELLED'].includes(meeting.stage);
+  const editable = canEdit && !held;
+  /*
+   * Confirming circulates the agenda, so invitees may be holding a printed
+   * copy. Changes are still allowed — the coordinator's — but the screen says
+   * what they cost before anybody makes one.
+   */
+  const circulated = meeting.stage === 'CONFIRMED';
+
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.display : 'That change could not be saved.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const addPoint = () =>
+    run(async () => {
+      await api(`/meetings/${meeting.id}/agenda-items`, {
+        method: 'POST',
+        body: JSON.stringify({ text: newPoint.trim() }),
+      });
+      setNewPoint('');
+    });
+
+  const saveEdit = () =>
+    run(async () => {
+      if (!editing) return;
+      await api(`/meetings/${meeting.id}/agenda-items/${editing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ text: editing.text.trim() }),
+      });
+      setEditing(null);
+    });
+
+  const removePoint = (id: string) =>
+    run(() => api(`/meetings/${meeting.id}/agenda-items/${id}`, { method: 'DELETE' }));
+
+  const toggleDefer = (id: string) =>
+    run(() => api(`/meetings/${meeting.id}/agenda-items/${id}/defer`, { method: 'POST' }));
 
   /*
    * The agenda document is offered even when there is nothing on it yet: the
@@ -301,17 +372,41 @@ function AgendaTab({ meeting, canShare }: { meeting: MeetingDetail; canShare: bo
   return (
     <div className="grid gap-4">
       {dialog}
-      {meeting.agendaFreezeAt && (
+      {error && <Notice tone="red">{error}</Notice>}
+
+      {meeting.agendaFreezeAt && !circulated && !held && (
         <Notice>
           Invitee contributions{' '}
           {new Date(meeting.agendaFreezeAt) <= new Date() ? 'closed' : 'close'}{' '}
-          <b>{formatDate(meeting.agendaFreezeAt)}</b>. The coordinator can still edit until the
-          meeting is confirmed.
+          <b>{formatDate(meeting.agendaFreezeAt)}</b>. The coordinator can still edit.
         </Notice>
       )}
+
+      {circulated && editable && (
+        <Notice tone="amber">
+          This agenda went out when the meeting was confirmed, so invitees may be holding a copy.
+          You can still change it — the document will say it was amended, and when.
+        </Notice>
+      )}
+
+      {held && (
+        <Notice>
+          This meeting has been held, so the agenda is now the record of what was taken. Anything
+          further belongs in the <Link href={`/meetings/${meeting.id}/minutes`}>minutes</Link>.
+        </Notice>
+      )}
+
       <Card
         title="Agenda"
-        tag={meeting.stage === 'CONFIRMED' ? 'Circulated and frozen' : 'Draft'}
+        tag={
+          held
+            ? 'As taken'
+            : circulated
+              ? meeting.agendaAmendedAt
+                ? 'Circulated · amended'
+                : 'Circulated'
+              : 'Draft'
+        }
         actions={documentActions}
       >
         <ol className="m-0 list-none p-0">
@@ -326,15 +421,73 @@ function AgendaTab({ meeting, canShare }: { meeting: MeetingDetail; canShare: bo
                   {a.ordinal}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <b
-                    className={`text-[13px] text-navy ${a.isDeferred ? 'line-through opacity-70' : ''}`}
-                  >
-                    {a.text}
-                  </b>
-                  {a.isDeferred && (
-                    <small className="ml-2 text-[11px] font-semibold text-accent">
-                      deferred
-                    </small>
+                  {editing?.id === a.id ? (
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        className="i min-w-[240px] flex-1"
+                        value={editing.text}
+                        onChange={(e) => setEditing({ id: a.id, text: e.target.value })}
+                        aria-label={`Reword point ${a.ordinal}`}
+                      />
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={busy || editing.text.trim().length < 5}
+                        onClick={() => void saveEdit()}
+                      >
+                        Save
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-start gap-2">
+                      <b
+                        className={`flex-1 text-[13px] text-navy ${a.isDeferred ? 'line-through opacity-70' : ''}`}
+                      >
+                        {a.text}
+                        {a.isDeferred && (
+                          <small className="ml-2 text-[11px] font-semibold text-accent">
+                            deferred
+                          </small>
+                        )}
+                      </b>
+                      {/*
+                        * The carry block is generated from the items it
+                        * carries, so it cannot be reworded or removed — only
+                        * the individual items can be deferred. Buttons that
+                        * would always be refused are not shown.
+                        */}
+                      {editable && !a.isCarryBlock && (
+                        <span className="flex flex-none gap-1">
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => setEditing({ id: a.id, text: a.text })}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => void toggleDefer(a.id)}
+                          >
+                            {a.isDeferred ? 'Reinstate' : 'Defer'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={busy}
+                            onClick={() => void removePoint(a.id)}
+                          >
+                            Remove
+                          </button>
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   {a.carriedItems.length > 0 && (
@@ -373,6 +526,29 @@ function AgendaTab({ meeting, canShare }: { meeting: MeetingDetail; canShare: bo
             </li>
           ))}
         </ol>
+
+        {editable && (
+          <div className="flex flex-wrap gap-2 border-t border-line px-[17px] py-3.5">
+            <input
+              className="i min-w-[240px] flex-1"
+              value={newPoint}
+              onChange={(e) => setNewPoint(e.target.value)}
+              placeholder="Add a point — what is to be discussed"
+              aria-label="New agenda point"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newPoint.trim().length >= 5) void addPoint();
+              }}
+            />
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={busy || newPoint.trim().length < 5}
+              onClick={() => void addPoint()}
+            >
+              {busy ? 'Saving…' : 'Add'}
+            </button>
+          </div>
+        )}
       </Card>
     </div>
   );

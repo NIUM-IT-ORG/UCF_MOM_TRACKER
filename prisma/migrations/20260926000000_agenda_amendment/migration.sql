@@ -1,0 +1,22 @@
+-- The agenda may be amended after it has been circulated, and it must say so.
+--
+-- docs/05-WORKFLOWS.md froze the agenda at CONFIRMED for everybody. In use
+-- that is too strict: a venue moves, a point is withdrawn, a late paper
+-- arrives, and the coordinator had no way to record any of it - the agenda
+-- stayed wrong and the correction was made verbally in the room.
+--
+-- The freeze is now the coordinator's to lift, between confirmation and the
+-- meeting being held. After HELD it is absolute again: at that point the
+-- agenda is a record of what was taken, and the minutes are where later
+-- thinking belongs.
+--
+-- This column is what keeps that honest. Confirming sends the agenda out, so
+-- invitees may be holding a printed copy; a change afterwards is stamped
+-- here and the document says "amended after circulation", with the date. NULL
+-- means the agenda is still exactly what was sent.
+--
+-- Widening only - every existing row is NULL, which is the correct reading of
+-- "never amended". ASCII and idempotent, in the house style: this has to
+-- apply to a WIN1252 cluster and survive a re-run.
+
+ALTER TABLE "meetings" ADD COLUMN IF NOT EXISTS "agenda_amended_at" TIMESTAMP(3);

@@ -49,13 +49,14 @@ export interface AgendaDocumentData {
     /** After this instant invitees may read the agenda but not add to it. */
     agendaFreezeAt: Date | null;
     confirmedAt: Date | null;
+    /** Set when the agenda changed after it had been circulated. */
+    agendaAmendedAt: Date | null;
     cancelledReason: string | null;
   };
   items: {
     ordinal: number;
     text: string;
     projectName: string | null;
-    addedByName: string | null;
     isCarryBlock: boolean;
     isDeferred: boolean;
     /**
@@ -175,6 +176,23 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
       : ''
   }
 
+  ${
+    /*
+     * An agenda that has changed since it went out must say so on its face.
+     *
+     * Confirming circulates it, so an invitee may be holding a copy printed
+     * that day. Reading a later version with no indication it differs is how
+     * somebody arrives prepared for a point that is no longer on it — the
+     * same failure the DRAFT watermark exists to prevent, at the other end
+     * of the document's life.
+     */
+    meeting.agendaAmendedAt
+      ? `<p class="note amended"><b>Amended after circulation.</b> This agenda was changed on
+         ${esc(stamp(meeting.agendaAmendedAt))}, after it had been sent out. Check it against any
+         copy you were given.</p>`
+      : ''
+  }
+
   ${carryBlock ? renderCarryForward(carryBlock) : ''}
 
   <h2>${carryBlock ? '2' : '1'}. Agenda</h2>
@@ -182,7 +200,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
     points.length === 0
       ? '<p class="lede">No agenda points have been added yet.</p>'
       : `<table class="grid">
-    <thead><tr><th class="n">#</th><th>Agenda point</th><th>Project</th><th>Raised by</th></tr></thead>
+    <thead><tr><th class="n">#</th><th>Agenda point</th><th>Project</th></tr></thead>
     <tbody>
       ${points
         .map(
@@ -190,7 +208,6 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
             <td class="n">${a.ordinal}</td>
             <td>${esc(a.text)}${a.isDeferred ? ' <span class="tag">deferred</span>' : ''}</td>
             <td>${esc(a.projectName ?? '—')}</td>
-            <td>${esc(a.addedByName ?? '—')}</td>
           </tr>`,
         )
         .join('')}
@@ -225,6 +242,8 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
         ? `Draft agenda · not yet confirmed · generated ${shortDate(data.generatedAt)}`
         : `Agenda${
             meeting.confirmedAt ? ` confirmed ${shortDate(meeting.confirmedAt)}` : ''
+          }${
+            meeting.agendaAmendedAt ? `, amended ${shortDate(meeting.agendaAmendedAt)}` : ''
           } · generated ${shortDate(data.generatedAt)}`
     }</span>
   </footer>
@@ -354,6 +373,9 @@ ${PAPER_STYLE}
   padding:18px 44px; }
 
 .note.cancelled { border-left-color:#C3372B; color:#8E2F26; margin:14px 0 0; }
+/* Amber, not red: an amended agenda is still a valid document, unlike a
+   cancelled meeting. It wants attention, not alarm. */
+.note.amended { border-left-color:var(--accent); color:#8A5A20; margin:14px 0 0; }
 
 /* A deferred point stays on the page — removing it would leave the agenda
    shorter than the one that was circulated — but it should not read as

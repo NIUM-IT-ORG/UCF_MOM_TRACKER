@@ -42,6 +42,8 @@ export interface MeetingRow {
   vcLink: string | null;
   stage: MeetingStage;
   agendaFreezeAt: string | null;
+  /** Set when the agenda changed after it had been circulated. */
+  agendaAmendedAt: string | null;
   confirmedAt: string | null;
   cancelledReason: string | null;
   chair: Person | null;

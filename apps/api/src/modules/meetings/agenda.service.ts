@@ -86,13 +86,16 @@ export class AgendaService {
         select: { id: true, ordinal: true, text: true, projectId: true, isCarryBlock: true },
       });
       // Drafting the agenda is what moves a scheduled meeting off AGENDA. It
-      // only ever moves forward — see advanceMonotonic.
-      if (meeting.type === 'SCHEDULED') {
+      // only ever moves forward — see advanceMonotonic. A confirmed meeting
+      // is already past it, so the stage is left alone and the change is
+      // recorded as an amendment instead.
+      if (meeting.type === 'SCHEDULED' && meeting.stage !== 'CONFIRMED') {
         await tx.meeting.update({
           where: { id: meetingId },
           data: { stage: advanceMonotonic('SCHEDULED', meeting.stage, 'draftAgenda') },
         });
       }
+      await this.markAmended(tx, meeting, user, `Point added: "${dto.text}"`);
       return created;
     });
   }
@@ -109,10 +112,21 @@ export class AgendaService {
       );
     }
 
-    return this.prisma.agendaItem.update({
-      where: { id: agendaItemId },
-      data: { text: dto.text, projectId: dto.projectId ?? null },
-      select: { id: true, ordinal: true, text: true, projectId: true },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.agendaItem.update({
+        where: { id: agendaItemId },
+        data: { text: dto.text, projectId: dto.projectId ?? null },
+        select: { id: true, ordinal: true, text: true, projectId: true },
+      });
+      // The old wording as well as the new: an amendment nobody can read back
+      // is only half a record.
+      await this.markAmended(
+        tx,
+        meeting,
+        user,
+        `Point ${updated.ordinal} reworded from "${item.text}" to "${dto.text}"`,
+      );
+      return updated;
     });
   }
 
@@ -133,8 +147,16 @@ export class AgendaService {
       );
     }
 
-    await this.prisma.agendaItem.delete({ where: { id: agendaItemId } });
-    return { id: agendaItemId, deleted: true };
+    return this.prisma.$transaction(async (tx) => {
+      await tx.agendaItem.delete({ where: { id: agendaItemId } });
+      await this.markAmended(
+        tx,
+        meeting,
+        user,
+        `Point ${item.ordinal} removed: "${item.text}"`,
+      );
+      return { id: agendaItemId, deleted: true };
+    });
   }
 
   /**
@@ -143,12 +165,29 @@ export class AgendaService {
    * than the agenda that was circulated.
    */
   async defer(user: AuthUser, meetingId: string, agendaItemId: string) {
-    await this.meetings.mustSee(user, meetingId);
+    const meeting = await this.meetings.mustSee(user, meetingId);
     const item = await this.mustBelong(meetingId, agendaItemId);
-    return this.prisma.agendaItem.update({
-      where: { id: agendaItemId },
-      data: { isDeferred: !item.isDeferred },
-      select: { id: true, isDeferred: true },
+
+    /*
+     * No freeze check, deliberately. Deferring a point is what happens in the
+     * room when it runs out of time, so it has to work while the meeting is
+     * being held — which is exactly when everything else is closed.
+     */
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.agendaItem.update({
+        where: { id: agendaItemId },
+        data: { isDeferred: !item.isDeferred },
+        select: { id: true, isDeferred: true },
+      });
+      // Only counts as an amendment before the meeting: deferring one during
+      // it is the meeting happening, not the agenda changing.
+      await this.markAmended(
+        tx,
+        meeting,
+        user,
+        `Point ${item.ordinal} ${updated.isDeferred ? 'deferred' : 'reinstated'}: "${item.text}"`,
+      );
+      return updated;
     });
   }
 
@@ -320,6 +359,40 @@ export class AgendaService {
     });
   }
 
+
+  /**
+   * Stamp an amendment made after the agenda went out, and say who made it.
+   *
+   * Only meaningful once the meeting is CONFIRMED: before that the agenda is
+   * still being assembled and nobody has been sent anything, so there is
+   * nothing to amend. Called by every mutation, and a no-op in every other
+   * stage, so no caller has to remember which case it is in.
+   *
+   * The audit row carries the wording because the column only records that
+   * something changed. "Point 4 removed after circulation" is what somebody
+   * reconstructing a disputed meeting actually needs.
+   */
+  private async markAmended(
+    tx: Prisma.TransactionClient,
+    meeting: { id: string; code: string; stage: string },
+    user: AuthUser,
+    detail: string,
+  ): Promise<void> {
+    if (meeting.stage !== 'CONFIRMED') return;
+    const now = new Date();
+    await tx.meeting.update({ where: { id: meeting.id }, data: { agendaAmendedAt: now } });
+    await tx.auditEntry.create({
+      data: {
+        actorId: user.id,
+        objectType: 'MEETING',
+        objectId: meeting.id,
+        objectRef: meeting.code,
+        event: 'AGENDA_AMENDED',
+        detail: `${detail} after the agenda had been circulated`,
+      },
+    });
+  }
+
   // ── helpers ──────────────────────────────────────────────────────────
 
   private async carryBlockId(tx: Prisma.TransactionClient, meetingId: string) {
@@ -333,7 +406,9 @@ export class AgendaService {
   private async mustBelong(meetingId: string, agendaItemId: string) {
     const item = await this.prisma.agendaItem.findFirst({
       where: { id: agendaItemId, meetingId },
-      select: { id: true, isCarryBlock: true, isDeferred: true },
+      // ordinal and text as well: the audit line for an amendment has to say
+      // which point and what it said, not just that something changed.
+      select: { id: true, ordinal: true, text: true, isCarryBlock: true, isDeferred: true },
     });
     if (!item) throw AppError.notFound('That agenda point');
     return item;
@@ -359,14 +434,46 @@ export class AgendaService {
     if (meeting.stage === 'CANCELLED') {
       throw new AppError('AGENDA_FROZEN', 'This meeting was cancelled.');
     }
-    if (meeting.stage === 'CONFIRMED' || meeting.stage === 'HELD' || meeting.stage === 'MINUTED' || meeting.stage === 'CLOSED') {
+
+    /*
+     * Once the meeting has been held the agenda is closed to everyone.
+     *
+     * At that point it has stopped being a plan and become a record of what
+     * was taken, which section 2 of the MoM reproduces. Editing it then would
+     * not be amending an agenda, it would be revising history — and anything
+     * thought of afterwards belongs in the minutes, which is what they are
+     * for.
+     */
+    if (meeting.stage === 'HELD' || meeting.stage === 'MINUTED' || meeting.stage === 'CLOSED') {
       throw new AppError(
         'AGENDA_FROZEN',
-        'The agenda was circulated when this meeting was confirmed and can no longer be changed.',
+        'This meeting has been held, so its agenda is now the record of what was taken. Anything further belongs in the minutes.',
       );
     }
 
     const coordinator = user.caps.includes('plan_scheduled') || user.caps.includes('plan_instant');
+
+    /*
+     * Confirmed means circulated, and it used to mean frozen for everybody.
+     * That was too strict to survive use: a venue moves, a point is
+     * withdrawn, a late paper arrives, and the coordinator had no way to
+     * record any of it — the agenda stayed wrong and the correction happened
+     * verbally in the room.
+     *
+     * So the coordinator may still amend it, and invitees may not: they were
+     * sent a document, and the freeze is exactly what makes it worth reading.
+     * The caller stamps `agendaAmendedAt`, so the change is never silent.
+     */
+    if (meeting.stage === 'CONFIRMED') {
+      if (!coordinator) {
+        throw new AppError(
+          'AGENDA_FROZEN',
+          'This agenda was circulated when the meeting was confirmed. Ask the coordinator to amend it.',
+        );
+      }
+      return;
+    }
+
     if (coordinator) return;
 
     if (meeting.agendaFreezeAt && meeting.agendaFreezeAt.getTime() <= Date.now()) {

@@ -307,6 +307,14 @@ model Meeting {
   agendaFreezeAt DateTime?     @map("agenda_freeze_at")
   confirmedById  String?       @map("confirmed_by_id")
   confirmedAt    DateTime?     @map("confirmed_at")
+  /// When the agenda was last changed after it had been circulated.
+  ///
+  /// Confirming a meeting sends the agenda out, so invitees may be holding a
+  /// printed copy. A later change is allowed - the coordinator's, and only
+  /// theirs - but it must not be silent, or somebody prepares for a point
+  /// that is no longer on it. Null means the agenda is still exactly what was
+  /// circulated.
+  agendaAmendedAt DateTime?    @map("agenda_amended_at")
   cancelledReason String?      @map("cancelled_reason")
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt

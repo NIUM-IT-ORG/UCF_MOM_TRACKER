@@ -28,6 +28,7 @@ const base: AgendaDocumentData = {
     chair: { name: 'Officer A', designationName: 'Mission Director' },
     agendaFreezeAt: null,
     confirmedAt: new Date('2026-09-10T06:00:00.000Z'),
+    agendaAmendedAt: null,
     cancelledReason: null,
   },
   items: [
@@ -35,7 +36,6 @@ const base: AgendaDocumentData = {
       ordinal: 1,
       text: 'Progress on package 3',
       projectName: 'Project 1',
-      addedByName: 'Officer C',
       isCarryBlock: false,
       isDeferred: false,
       carried: [],
@@ -123,11 +123,22 @@ describe('the draft watermark', () => {
 });
 
 describe('the agenda points', () => {
-  it('lists each point with its project and who raised it', () => {
+  it('lists each point with its project', () => {
     const html = render();
     expect(html).toContain('Progress on package 3');
     expect(html).toContain('Project 1');
-    expect(html).toContain('Officer C');
+  });
+
+  /*
+   * Dropped on the client's instruction. An agenda is a list of what will be
+   * discussed; who typed each line into the system is administration, and it
+   * was taking a column on a document that wants to stay a page long.
+   * "Raised by" on an action or a clarification is a different thing and
+   * stays — there it names who is owed an answer.
+   */
+  it('does not name who added each point', () => {
+    const html = render();
+    expect(html).not.toContain('Raised by');
   });
 
   it('says so plainly when nothing has been added yet', () => {
@@ -162,7 +173,6 @@ describe('the carried-forward block', () => {
     ordinal: 0,
     text: 'Review of items from previous meetings',
     projectName: null,
-    addedByName: 'Officer C',
     isCarryBlock: true,
     isDeferred: false,
     carried: [
@@ -325,5 +335,47 @@ describe('the status label of a carried item', () => {
    */
   it('prints a dash rather than undefined when neither is set', () => {
     expect(carriedStatusLabel(null, null)).toBe('—');
+  });
+});
+
+/**
+ * An agenda that changed after it went out.
+ *
+ * Confirming circulates it, so an invitee may be holding a copy printed that
+ * day. `docs/05` used to freeze it there for everybody, which turned out to
+ * be stricter than the work: venues move and points are withdrawn, and with
+ * no way to record that the agenda simply stayed wrong. The coordinator can
+ * amend it now — and the document has to say so, or somebody arrives
+ * prepared for a point that is no longer on it.
+ */
+describe('an agenda amended after circulation', () => {
+  const amended = new Date('2026-09-12T09:30:00.000Z');
+
+  it('says so, with the date, where it cannot be missed', () => {
+    const html = withMeeting({ agendaAmendedAt: amended });
+    expect(html).toContain('Amended after circulation.');
+    expect(html).toContain('12 Sep 2026 at 15:00 IST');
+    expect(html).toContain('Check it against any');
+  });
+
+  it('records it in the footer as well as the body', () => {
+    expect(withMeeting({ agendaAmendedAt: amended })).toMatch(/amended 12 Sep 2026/);
+  });
+
+  /* The ordinary case has to stay quiet, or the notice means nothing. */
+  it('says nothing when the agenda is still what was circulated', () => {
+    const html = render();
+    expect(html).not.toContain('Amended after circulation');
+    expect(html).toContain('Agenda confirmed 10 Sep 2026');
+  });
+
+  /*
+   * A draft cannot have been amended after circulation because it has not
+   * been circulated. Printing both would be a contradiction on one page.
+   */
+  it('is not claimed on an agenda that was never confirmed', () => {
+    const html = withMeeting({ stage: 'AGENDA', confirmedAt: null, agendaAmendedAt: null });
+    expect(html).toContain('<span>DRAFT</span>');
+    expect(html).not.toContain('Amended after circulation');
   });
 });
