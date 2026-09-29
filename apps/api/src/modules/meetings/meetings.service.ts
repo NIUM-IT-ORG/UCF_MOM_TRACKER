@@ -12,7 +12,7 @@ import { AppError } from '../../common/app-error.js';
 import { canSeeProject, meetingScope, scopedProjectIds } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
-import { advanceMonotonic, isPlanning, nextStage } from './meeting.machine.js';
+import { advanceMonotonic, isHeldOrLater, isPlanning, nextStage } from './meeting.machine.js';
 import { formatMeetingCode, kindFor, meetingScopeFor, nextMeetingNumber } from './meeting-code.js';
 
 const LIST_SELECT = {
@@ -485,6 +485,93 @@ export class MeetingsService {
         tx,
       );
       return updated;
+    });
+  }
+
+  /**
+   * Removing a meeting outright — the one case Cancel does not cover.
+   *
+   * Cancel is for a meeting that was real and did not happen: it keeps the
+   * record, with a reason, because that is a fact about the programme. This
+   * is for a meeting that should never have existed — a duplicate, or one
+   * created against the wrong project — where keeping it is just noise.
+   *
+   * The distinction is enforced, not left to judgement. The moment anything
+   * has followed from a meeting it stops being a mistake and becomes part of
+   * the record, so this refuses when there are minutes, a MoM of any state,
+   * or a single action or clarification. That is what keeps rules 3, 4 and 6
+   * in CLAUDE.md true: nothing signed, circulated or assigned can be
+   * destroyed through this door, whatever capability the caller holds.
+   *
+   * What the cascade does take with it — agenda points, invitees, RSVPs,
+   * attached papers — only ever described a meeting that is going away, and
+   * none of it is referenced from anywhere else.
+   *
+   * The audit row is written first and survives: `audit_entries` holds the
+   * object as a plain type and id with no foreign key, precisely so the trail
+   * outlives the thing it describes. Deleting a meeting is itself a fact
+   * about the programme, and it stays on the record even though the meeting
+   * does not.
+   */
+  async remove(user: AuthUser, id: string) {
+    const meeting = await this.mustSee(user, id);
+
+    const [minutes, moms, items, docs] = await Promise.all([
+      this.prisma.minutes.count({ where: { meetingId: id } }),
+      this.prisma.mom.count({ where: { meetingId: id } }),
+      this.prisma.item.count({ where: { meetingId: id } }),
+      this.prisma.document.count({ where: { meetingId: id } }),
+    ]);
+
+    /*
+     * Named individually rather than as one refusal: "this meeting has a
+     * MoM" tells somebody what to do next, where "cannot be deleted" starts
+     * a support call.
+     */
+    const blocking: string[] = [];
+    if (items > 0) {
+      blocking.push(
+        `${items} action${items === 1 ? '' : 's'} or clarification${items === 1 ? '' : 's'} raised at it`,
+      );
+    }
+    if (moms > 0) blocking.push(`a Minutes of Meeting document${moms > 1 ? ` (${moms} versions)` : ''}`);
+    if (minutes > 0) blocking.push('minutes recorded against it');
+    if (isHeldOrLater(meeting.stage)) blocking.push('a record of having been held');
+
+    if (blocking.length > 0) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${meeting.code} cannot be deleted: it has ${blocking.join(', and ')}. ` +
+          'Cancel it instead — that keeps the record and asks for a reason.',
+        { blocking },
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.auditEntry.create({
+        data: {
+          actorId: user.id,
+          objectType: 'MEETING',
+          objectId: id,
+          objectRef: meeting.code,
+          event: 'MEETING_DELETED',
+          detail:
+            `Deleted by ${user.name}: "${meeting.title}", ` +
+            `${meeting.stage.toLowerCase()}, with nothing recorded against it` +
+            (docs > 0 ? `; ${docs} attached paper(s) went with it` : ''),
+          // The meeting as it was, so the row is readable without it.
+          before: {
+            code: meeting.code,
+            title: meeting.title,
+            type: meeting.type,
+            stage: meeting.stage,
+            meetingDate: meeting.meetingDate,
+          },
+        },
+      });
+
+      await tx.meeting.delete({ where: { id } });
+      return { id, code: meeting.code, deleted: true };
     });
   }
 

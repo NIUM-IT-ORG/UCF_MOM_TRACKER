@@ -1,5 +1,5 @@
 /**
- * The eighteen capabilities. This file is the only place they are defined.
+ * The nineteen capabilities. This file is the only place they are defined.
  * A capability string must never be typed as a literal anywhere else.
  *
  * Capabilities are granted to a DESIGNATION, never to a user. Data scope
@@ -25,6 +25,13 @@ export const CAPABILITIES = {
   manage_access: 'Manage access control',
   view_all_projects: 'See every project',
   share_object: 'Share a meeting, MoM, item, document or report',
+  /**
+   * Removing a meeting outright, for the one case Cancel does not cover: a
+   * meeting created in error, or a duplicate. The service refuses it the
+   * moment anything has followed from the meeting — minutes, a MoM, or a
+   * single action — so nothing on the record can be destroyed with it.
+   */
+  delete_meeting: 'Delete a meeting created in error',
 } as const;
 
 export type Capability = keyof typeof CAPABILITIES;
@@ -82,7 +89,15 @@ export const SEED_DESIGNATION_CAPS: Record<string, Capability[]> = {
     'share_object',
   ],
   ULB: ['add_agenda', 'update_own_item', 'respond_clarification', 'share_object'],
-  SYS: ['manage_masters', 'manage_access', 'view_all_projects', 'share_object'],
+  SYS: [
+    'manage_masters',
+    'manage_access',
+    'view_all_projects',
+    'share_object',
+    // Nobody else, including the Mission Director: this is housekeeping, not
+    // authority over the record.
+    'delete_meeting',
+  ],
   EXT: [],
 };
 

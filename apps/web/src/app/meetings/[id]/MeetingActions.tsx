@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ApiError, api } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session';
 import { Field, Notice } from '@/components/ui';
 import type { MeetingDetail, MomRow } from '@/lib/meetings';
@@ -25,9 +26,10 @@ export function MeetingActions({
   onDone: () => void;
 }) {
   const { caps } = useSession();
+  const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [asking, setAsking] = useState<'cancel' | 'reschedule' | null>(null);
+  const [asking, setAsking] = useState<'cancel' | 'reschedule' | 'delete' | null>(null);
   const [reason, setReason] = useState('');
   const [when, setWhen] = useState({
     meetingDate: meeting.meetingDate.slice(0, 10),
@@ -40,16 +42,24 @@ export function MeetingActions({
   const canConfirm = caps.includes('confirm_meeting');
   const canMinute = caps.includes('record_minutes');
 
-  async function run(label: string, path: string, body?: unknown) {
+  /** Returns whether it worked, so a caller can navigate only on success. */
+  async function run(
+    label: string,
+    path: string,
+    body?: unknown,
+    method: 'POST' | 'DELETE' = 'POST',
+  ): Promise<boolean> {
     setBusy(label);
     setError(null);
     try {
-      await api(path, { method: 'POST', ...(body ? { body: JSON.stringify(body) } : {}) });
+      await api(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
       setAsking(null);
       setReason('');
       onDone();
+      return true;
     } catch (err) {
       setError(err instanceof ApiError ? err.display : 'That did not work.');
+      return false;
     } finally {
       setBusy(null);
     }
@@ -113,6 +123,20 @@ export function MeetingActions({
     buttons.push(
       <button key="cancel" className="btn-ghost" type="button" onClick={() => setAsking('cancel')}>
         Cancel the meeting
+      </button>,
+    );
+  }
+
+  /*
+   * Housekeeping, not a step in the meeting, so it is offered only to the
+   * System Administrator and only while there is nothing to lose. The server
+   * refuses it the moment anything has followed from the meeting; the button
+   * is hidden in the obvious cases so it is not offered and then refused.
+   */
+  if (caps.includes('delete_meeting') && !['HELD', 'MINUTED', 'CLOSED'].includes(stage)) {
+    buttons.push(
+      <button key="delete" className="btn-ghost" type="button" onClick={() => setAsking('delete')}>
+        Delete
       </button>,
     );
   }
@@ -201,6 +225,47 @@ export function MeetingActions({
             </button>
             <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
               Never mind
+            </button>
+          </div>
+        </div>
+      )}
+
+      {asking === 'delete' && (
+        <div className="mt-3 rounded-[10px] border border-[#EBC7C0] bg-[#FDF3F1] px-3.5 py-3">
+          <p className="mb-2 mt-0 text-[12.5px]">
+            <b>Delete {meeting.code} for good.</b> This is for a meeting created in error — a
+            duplicate, or one raised against the wrong project. It cannot be undone, and the
+            agenda, the invitees and any attached papers go with it.
+          </p>
+          <p className="mb-2.5 mt-0 text-[12px] text-muted">
+            If the meeting was real and simply is not happening, cancel it instead: that keeps it
+            in the register with a reason. The server refuses this outright if minutes, a MoM or
+            any action has been recorded against it.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={busy !== null}
+              onClick={() =>
+                void (async () => {
+                  const gone = await run('delete', `/meetings/${meeting.id}`, undefined, 'DELETE');
+                  // Only on success. A refused delete has a reason worth
+                  // reading, and it is on this page — navigating away would
+                  // throw it off screen before anybody saw it.
+                  if (!gone) return;
+                  // Nothing to come back to: reloading the page it was on
+                  // would only produce "that meeting is not one you have
+                  // access to", which reads like a permissions problem.
+                  router.push('/meetings');
+                  router.refresh();
+                })()
+              }
+            >
+              {busy === 'delete' ? 'Deleting…' : 'Delete it permanently'}
+            </button>
+            <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
+              Keep it
             </button>
           </div>
         </div>

@@ -32,6 +32,7 @@ Sixteen keys, in `packages/shared/src/capabilities.ts`:
 | `manage_access` | Edit the designation × capability matrix |
 | `view_all_projects` | See every project regardless of mapping |
 | `share_object` | Use the Share control (held by all but `EXT`) |
+| `delete_meeting` | Remove a meeting created in error — `SYS` only |
 
 ## 2 · Designation × capability
 
@@ -54,6 +55,7 @@ Sixteen keys, in `packages/shared/src/capabilities.ts`:
 | manage_access | | | | | | | | ✓ | |
 | view_all_projects | ✓ | ✓ | ✓ | | ✓ | | | ✓ | |
 | share_object | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| delete_meeting | | | | | | | | ✓ | |
 
 MD Mission Director · AMD Additional Mission Director · CDMA · PD Project Director · PDMC · MC Meeting Coordinator · ULB ULB Nodal Officer · SYS System Administrator · EXT External invitee.
 
@@ -93,7 +95,8 @@ Capability and scope are necessary but not sufficient. These extra guards live i
 - `confirm_completion` requires `user.id ∉ item.owners` — nobody confirms their own work.
 - `approve_mom` cannot be exercised by the officer who submitted it.
 - `record_minutes` is refused once `minutes.lockedAt` is set.
-- `add_agenda` is refused after `agendaFreezeAt` for anyone but the coordinator, and after `CONFIRMED` for everyone.
+- `add_agenda` is refused after `agendaFreezeAt` for anyone but the coordinator. After `CONFIRMED` the coordinator may still amend — the agenda has been circulated by then, so the change is stamped and the document says it was amended — and after `HELD` it is closed to everyone.
+- `delete_meeting` removes a meeting outright, and is the System Administrator's alone: it is housekeeping, not authority over the record, and is deliberately not something seniority confers. The service refuses it the moment anything has followed from the meeting — minutes, a MoM of any state, any action or clarification, or a record of having been held — so nothing signed, circulated or assigned can be destroyed through it. A meeting that was real and did not happen is **cancelled**, which keeps it in the register with a reason. The audit row is written first and outlives the meeting, because `audit_entries` carries the object as a plain type and id with no foreign key.
 - Invite-only accounts (`accountState = INVITE_ONLY`, `passwordHash = null`) cannot authenticate at all; they exist to receive notifications and be named in attendance.
 
 ## 5 · Implementation

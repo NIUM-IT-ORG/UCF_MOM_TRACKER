@@ -133,6 +133,23 @@ export class MeetingsController {
     return this.meetings.reschedule(user, id, rescheduleDto.parse(body));
   }
 
+  /**
+   * Delete a meeting created in error.
+   *
+   * A capability of its own, held by the System Administrator alone — this is
+   * housekeeping, not authority over the record, and it is not something a
+   * Mission Director should acquire by virtue of seniority.
+   *
+   * The audit row is written before the row goes, and survives it:
+   * `audit_entries` carries the object as a plain type and id with no foreign
+   * key, exactly so the trail outlives what it describes.
+   */
+  @Delete(':id')
+  @RequireCapability('delete_meeting')
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.meetings.remove(user, id);
+  }
+
   @Post(':id/cancel')
   @RequireCapability('confirm_meeting')
   cancel(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {

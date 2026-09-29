@@ -152,3 +152,25 @@ describe('a clarification answered in the meeting', () => {
     expect(r.success).toBe(false);
   });
 });
+
+/**
+ * Who may remove a meeting.
+ *
+ * Deleting one is the only operation in the product that destroys rather than
+ * records, so the grant is pinned here: the System Administrator and nobody
+ * else. It is housekeeping — a duplicate, or a meeting raised against the
+ * wrong project — and deliberately not something seniority confers. A meeting
+ * that was real and did not happen is cancelled, which keeps the record.
+ */
+describe('delete_meeting', () => {
+  it('is held by the System Administrator', () => {
+    expect(SEED_DESIGNATION_CAPS.SYS).toContain('delete_meeting');
+  });
+
+  it('is held by nobody else — not even the Mission Director', () => {
+    for (const [designation, caps] of Object.entries(SEED_DESIGNATION_CAPS)) {
+      if (designation === 'SYS') continue;
+      expect(caps, designation).not.toContain('delete_meeting');
+    }
+  });
+});
