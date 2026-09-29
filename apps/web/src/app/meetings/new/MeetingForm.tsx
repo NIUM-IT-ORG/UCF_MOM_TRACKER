@@ -7,22 +7,9 @@ import {
 } from '@mom/shared';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
+import { useProjectOptions } from '@/lib/projects';
 import { Field } from '@/components/ui';
 import type { Person } from '@/lib/meetings';
-
-/** Just enough of a project to offer it in the picker. */
-interface ProjectOption {
-  id: string;
-  code: string;
-  name: string;
-}
-
-/** By id, keeping the first occurrence, then ordered by code as the API does. */
-function dedupe(rows: ProjectOption[]): ProjectOption[] {
-  const seen = new Map<string, ProjectOption>();
-  for (const r of rows) if (!seen.has(r.id)) seen.set(r.id, r);
-  return [...seen.values()].sort((a, b) => a.code.localeCompare(b.code));
-}
 
 export interface MeetingDraft {
   category: MeetingCategory;
@@ -87,7 +74,7 @@ export function MeetingFields({
 }) {
   const { user, caps } = useSession();
   const [people, setPeople] = useState<Person[]>([]);
-  const [allProjects, setAllProjects] = useState<ProjectOption[] | null>(null);
+  const { projects, loading: projectsLoading } = useProjectOptions();
   const err = (k: keyof MeetingDraft) => (showErrors ? (errors[k] ?? null) : null);
 
   /*
@@ -108,22 +95,6 @@ export function MeetingFields({
       .catch(() => setPeople([]));
   }, []);
 
-  useEffect(() => {
-    if (!seesAll) return;
-    // `/projects` is scoped server-side too, so this cannot widen anybody's
-    // reach — it just stops the form being narrower than the caller's scope.
-    api<ProjectOption[]>('/projects')
-      .then(setAllProjects)
-      .catch(() => setAllProjects([]));
-  }, [seesAll]);
-
-  /*
-   * Mapped projects always count, even for somebody who sees everything —
-   * the two lists are merged rather than swapped, so a head-office officer
-   * who also happens to be mapped somewhere never loses that project while
-   * `/projects` is still loading.
-   */
-  const projects = dedupe([...(user?.projects ?? []), ...(allProjects ?? [])]);
 
   return (
     <div className="grid gap-4">
@@ -231,7 +202,7 @@ export function MeetingFields({
         >
           {projects.length === 0 && (
             <span className="px-1 py-1 text-[12px] text-muted">
-              {seesAll && allProjects === null
+              {projectsLoading
                 ? 'Loading projects…'
                 : seesAll
                   ? 'No projects have been created yet, so there is nothing to meet about.'
