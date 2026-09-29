@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Crest } from '@/components/Crest';
 import { ApiError, authApi } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
@@ -148,16 +149,42 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center overflow-y-auto bg-[linear-gradient(160deg,#142640_0%,#1D3557_55%,#2E5FA3_130%)] p-9">
       <div className="w-full max-w-[1000px]">
-        <header className="mb-7 text-center">
-          <h1 className="m-0 font-serif text-[26px] font-bold text-white">
-            Urban Challenge Fund
-          </h1>
-          <p className="mt-1.5 text-[12.5px] uppercase tracking-[2.4px] text-[#8FA8CC]">
-            Meeting &amp; Action Item Tracker
-          </p>
+        {/*
+          * The masthead the printed documents carry, on the way in.
+          *
+          * State emblem left, CDMA roundel right, the wording between them —
+          * the same arrangement as the top of every MoM, so the system looks
+          * like the papers it produces rather than like a login form that
+          * happens to sit in front of them. Either crest hides itself if its
+          * file is absent, and the wording is centred by its own margin
+          * rather than by the crests, so it stays put when one is missing.
+          */}
+        <header className="mb-7">
+          <div className="flex items-center justify-center gap-6">
+            <Crest name="emblem" size={78} alt="Government of Telangana" />
+            <div className="text-center">
+              <p className="m-0 text-[12.5px] font-bold uppercase tracking-[1.6px] text-[#C5D4EA]">
+                Government of Telangana
+              </p>
+              <p className="mb-2 mt-0.5 text-[11.5px] font-semibold tracking-[0.6px] text-[#8FA8CC]">
+                Municipal Administration Department
+              </p>
+              <h1 className="m-0 font-serif text-[26px] font-bold text-white">
+                Urban Challenge Fund
+              </h1>
+              <p className="mt-1.5 text-[12.5px] uppercase tracking-[2.4px] text-[#8FA8CC]">
+                Meeting &amp; Action Item Tracker
+              </p>
+            </div>
+            <Crest
+              name="cdma"
+              size={68}
+              alt="Commissioner &amp; Director of Municipal Administration"
+            />
+          </div>
         </header>
 
-        <div className="grid gap-5 md:grid-cols-[1fr_1.2fr]">
+        <div className="mx-auto grid max-w-[560px] gap-5">
           <section className="rounded-[14px] bg-white p-6 shadow-[0_10px_36px_rgba(0,0,0,.24)]">
             <h2 className="m-0 font-serif text-[18px] font-semibold text-navy">
               {step === 'password' ? 'Sign in' : 'Enter your code'}

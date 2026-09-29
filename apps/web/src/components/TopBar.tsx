@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Crest } from '@/components/Crest';
 import { usePathname } from 'next/navigation';
 import { NAV } from './nav';
 import { useSession } from '@/lib/session';
@@ -44,6 +45,19 @@ export function TopBar() {
 
   return (
     <header className="flex min-h-[60px] flex-none flex-wrap items-center gap-3 border-b border-line bg-card px-[22px] py-[9px]">
+      {/*
+        * The state emblem, small, at the head of every screen.
+        *
+        * It sits before the breadcrumb rather than in the sidebar because the
+        * sidebar already carries the product mark, and what this bar was
+        * missing is any sign of whose system this is. Decorative here — the
+        * breadcrumb beside it is the label — so it is hidden from screen
+        * readers rather than read out on every page.
+        */}
+      <span aria-hidden="true" className="flex-none">
+        <Crest name="emblem" size={30} alt="" />
+      </span>
+
       <nav aria-label="Breadcrumb" className="min-w-0 text-[12.5px] text-muted">
         {/* "Meetings / Meetings / …" reads like a bug. When the group and the
             item share a name, one of them is enough. */}
