@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   createItemDto,
   itemQueryDto,
@@ -42,6 +53,17 @@ export class ItemsController {
   @Audited({ objectType: 'ITEM', event: 'ITEM_UPDATED' })
   update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     return this.items.update(user, id, updateItemDto.parse(body));
+  }
+
+  /**
+   * Remove an item raised in error. Only while it is inert — the service
+   * refuses once the MoM has been circulated, because by then somebody has
+   * been made accountable for it.
+   */
+  @Delete(':id')
+  @RequireCapability('create_items')
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.items.remove(user, id);
   }
 
   @Put(':id/owners')

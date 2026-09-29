@@ -293,6 +293,27 @@ export class ItemsService {
   async update(user: AuthUser, id: string, dto: UpdateItemDto) {
     const item = await this.mustSee(user, id);
 
+    /*
+     * Re-nominating is a drafting correction, not a transition. After
+     * circulation the nominee has been told they owe an answer, and changing
+     * that silently in a document people have read is not an edit anybody
+     * should be able to make.
+     */
+    if (dto.respondedById) {
+      if (item.type !== 'CLARIFICATION') {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          'An action has responsible officers, not a responder. Use the owners list.',
+        );
+      }
+      if (item.activatedAt) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          `${item.ref} has been circulated, so ${'the nominated officer'} has already been asked. Respond to it instead of re-nominating.`,
+        );
+      }
+    }
+
     if (item.type === 'CLARIFICATION' && (dto.dueDate || dto.priority)) {
       // Rejected rather than silently stripped: dropping a date somebody typed
       // is how people stop trusting a form.
@@ -312,6 +333,7 @@ export class ItemsService {
           ...(dto.remarks !== undefined ? { remarks: dto.remarks } : {}),
           ...(dto.dueDate ? { dueDate: new Date(dto.dueDate) } : {}),
           ...(dto.priority ? { priority: dto.priority } : {}),
+          ...(dto.respondedById ? { respondedById: dto.respondedById } : {}),
           // Revising the date forward is what brings a delayed item back — the
           // work is on track again, and the register should say so.
           ...(revising ? { actionStatus: advanceAction('DELAYED', 'reviseDue') } : {}),
@@ -334,6 +356,66 @@ export class ItemsService {
   }
 
   /** Joint ownership: this replaces the set, and every one of them is accountable. */
+  /**
+   * Removing an item raised in error, while the minutes are still being
+   * drafted.
+   *
+   * Only while it is inert. `activatedAt` is what makes an item real: until
+   * the signed MoM is circulated nobody has been told about it, no clock is
+   * running and no officer is accountable, so a line typed by mistake is
+   * exactly that — a typo in a draft. The moment it is circulated it is a
+   * commitment somebody has been given, and rule 4 says deleting it is not
+   * available: it is reported complete, confirmed, or closed, each of which
+   * leaves a trail.
+   *
+   * `create_items` rather than a capability of its own. Whoever may raise an
+   * item during drafting may unraise it; this grants nobody reach they did
+   * not already have, because the item they are deleting is one that has
+   * never left the room.
+   */
+  async remove(user: AuthUser, id: string) {
+    const item = await this.mustSee(user, id);
+
+    if (item.activatedAt) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${item.ref} has been circulated, so somebody is accountable for it and it cannot be deleted. ` +
+          (item.type === 'ACTION'
+            ? 'Report it complete and have it confirmed, or send it back.'
+            : 'Respond to it and close it.'),
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      /*
+       * The audit row goes first and survives: `audit_entries` holds the
+       * object as a plain type and id with no foreign key, so the trail
+       * outlives what it describes. A reference that was issued and then
+       * withdrawn is worth being able to explain — ACT-07 existing in a
+       * draft and not in the minutes is otherwise unaccountable.
+       */
+      await tx.auditEntry.create({
+        data: {
+          actorId: user.id,
+          objectType: 'ITEM',
+          objectId: id,
+          objectRef: item.ref,
+          event: 'ITEM_DELETED',
+          detail: `Deleted while drafting, before circulation: "${item.description}"`,
+          before: {
+            ref: item.ref,
+            type: item.type,
+            description: item.description,
+            dueDate: item.dueDate,
+          },
+        },
+      });
+
+      await tx.item.delete({ where: { id } });
+      return { id, ref: item.ref, deleted: true };
+    });
+  }
+
   async setOwners(user: AuthUser, id: string, dto: SetOwnersDto) {
     const item = await this.mustSee(user, id);
     if (item.type !== 'ACTION') {

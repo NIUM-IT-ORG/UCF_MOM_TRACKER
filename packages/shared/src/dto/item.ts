@@ -77,6 +77,15 @@ export const updateItemDto = z
     remarks: z.string().trim().optional(),
     dueDate: isoDate.optional(),
     priority: z.enum(['VERY_HIGH', 'HIGH', 'MEDIUM', 'LOW', 'LOWER']).optional(),
+    /**
+     * Who is nominated to answer a clarification.
+     *
+     * Correcting it is a drafting fix, so the service allows it only while
+     * the item is inert. Once circulated the nominee has been told, and
+     * changing who owes the answer is `respond` or a new item — not a quiet
+     * edit to a document people have already read.
+     */
+    respondedById: cuid.optional(),
   })
   .strict();
 export type UpdateItemDto = z.infer<typeof updateItemDto>;

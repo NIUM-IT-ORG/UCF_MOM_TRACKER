@@ -14,6 +14,7 @@ import { Card, Empty, ItemStatusChip, Notice, PageHead, TableWrap } from '@/comp
 import { DocumentUpload } from '@/components/DocumentUpload';
 import { Editor } from './Editor';
 import { ItemForm } from './ItemForm';
+import { EditItem } from './EditItem';
 
 interface Annexure {
   id: string;
@@ -46,6 +47,8 @@ export default function MinutesPage() {
   const [locked, setLocked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [editing, setEditing] = useState<ItemRow | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loaded = useRef(false);
@@ -88,6 +91,29 @@ export default function MinutesPage() {
   }, [load]);
 
   useSetCrumbTail(meeting ? `${meeting.code} · minutes` : null);
+
+  /**
+   * Withdraw an item raised in error.
+   *
+   * The server refuses once the MoM has been circulated, so this is only
+   * ever a draft correction. Confirmed first because it is destructive and
+   * the reference goes with it — ACT-07 will not be reissued.
+   */
+  async function removeItem(item: ItemRow) {
+    if (!confirm(`Delete ${item.ref}? It has not been circulated, so nobody has been told about it. This cannot be undone.`)) {
+      return;
+    }
+    setRemoving(item.id);
+    setError(null);
+    try {
+      await api(`/items/${item.id}`, { method: 'DELETE' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.display : 'That item could not be deleted.');
+    } finally {
+      setRemoving(null);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -439,6 +465,7 @@ export default function MinutesPage() {
                     <th>Responsible</th>
                     <th>Due</th>
                     <th>Status</th>
+                    {canRaise && <th className="text-right">Correct</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -461,6 +488,29 @@ export default function MinutesPage() {
                           isActive={i.isActive}
                         />
                       </td>
+                      {canRaise && (
+                        <td className="whitespace-nowrap text-right">
+                          <button type="button" className="btn-ghost" onClick={() => setEditing(i)}>
+                            Edit
+                          </button>
+                          {/*
+                            * Delete only while it is inert. Once circulated the
+                            * item is somebody's commitment and the ladder takes
+                            * over — the server refuses, and a button that is
+                            * always refused is worse than no button.
+                            */}
+                          {!i.isActive && (
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={removing !== null}
+                              onClick={() => void removeItem(i)}
+                            >
+                              {removing === i.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -469,6 +519,15 @@ export default function MinutesPage() {
           )}
         </Card>
       </div>
+
+      {editing && meeting && (
+        <EditItem
+          item={editing}
+          meeting={meeting}
+          onClose={() => setEditing(null)}
+          onSaved={() => void load()}
+        />
+      )}
     </>
   );
 }
