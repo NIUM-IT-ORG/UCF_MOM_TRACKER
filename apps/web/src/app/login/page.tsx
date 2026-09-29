@@ -14,16 +14,65 @@ import { useSession } from '@/lib/session';
  * uses, and the shortcut disappears outside development.
  */
 const DEMO_OFFICERS = [
-  { email: 'officer.a@example.gov', name: 'Officer A', role: 'Mission Director', colour: '#BF3B2B' },
+  {
+    email: 'officer.a@example.gov',
+    name: 'Officer A',
+    role: 'Mission Director',
+    colour: '#BF3B2B',
+  },
   { email: 'officer.c@example.gov', name: 'Officer C', role: 'PDMC', colour: '#D9772B' },
-  { email: 'officer.d@example.gov', name: 'Officer D', role: 'Meeting Coordinator · Project 1', colour: '#2E5FA3' },
-  { email: 'officer.g@example.gov', name: 'Officer G', role: 'Project Coordinator', colour: '#B2427A' },
-  { email: 'officer.h@example.gov', name: 'Officer H', role: 'ULB Nodal Officer', colour: '#7D3C98' },
+  {
+    email: 'officer.d@example.gov',
+    name: 'Officer D',
+    role: 'Meeting Coordinator · Project 1',
+    colour: '#2E5FA3',
+  },
+  {
+    email: 'officer.g@example.gov',
+    name: 'Officer G',
+    role: 'Project Coordinator',
+    colour: '#B2427A',
+  },
+  {
+    email: 'officer.h@example.gov',
+    name: 'Officer H',
+    role: 'ULB Nodal Officer',
+    colour: '#7D3C98',
+  },
   { email: 'officer.k@example.gov', name: 'Officer K', role: 'CDMA', colour: '#5E7DAA' },
-  { email: 'officer.l@example.gov', name: 'Officer L', role: 'System Administrator', colour: '#64707F' },
-  { email: 'officer.b@example.gov', name: 'Officer B', role: 'Additional Mission Director', colour: '#BF3B2B' },
+  {
+    email: 'officer.l@example.gov',
+    name: 'Officer L',
+    role: 'System Administrator',
+    colour: '#64707F',
+  },
+  {
+    email: 'officer.b@example.gov',
+    name: 'Officer B',
+    role: 'Additional Mission Director',
+    colour: '#BF3B2B',
+  },
 ];
 const DEMO_PASSWORD = 'ucf-demo-2026';
+
+/**
+ * Whether to advertise the seeded accounts.
+ *
+ * This panel lists eight officers and the password they share, and it had no
+ * condition on it at all — so a live deployment published a working
+ * System Administrator credential on its own sign-in page, to anyone who
+ * reached the URL. With OTP switchable off, that password is the only thing
+ * between a stranger and the whole record.
+ *
+ * `process.env.NODE_ENV` is inlined by Next at build time, so in a
+ * production build this is the literal `false` and the block below —
+ * including the password string — is removed by the minifier rather than
+ * merely hidden. Nothing to find in the shipped JavaScript.
+ *
+ * The accounts still work: this removes the advertisement, not the seed.
+ * Rotating those passwords is a separate job, and worth doing.
+ */
+const SHOW_DEMO_ACCOUNTS = process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -159,7 +208,9 @@ export default function LoginPage() {
                   />
                 </Field>
                 {hint && (
-                  <p className="mb-3 rounded-lg bg-ice px-3 py-2 text-[12px] text-muted">{hint}</p>
+                  <p className="mb-3 rounded-lg bg-ice px-3 py-2 text-[12px] text-muted">
+                    {hint}
+                  </p>
                 )}
                 {error && <Problem>{error}</Problem>}
                 <button className="btn-primary w-full" disabled={busy} type="submit">
@@ -180,39 +231,44 @@ export default function LoginPage() {
             )}
           </section>
 
-          <section>
-            <h2 className="m-0 text-[10.5px] font-extrabold uppercase tracking-[2px] text-[#8FA8CC]">
-              Demo accounts
-            </h2>
-            <p className="mb-3 mt-1.5 text-[12.5px] text-[#C5D4EA]">
-              Seeded officers, all with the password <code>{DEMO_PASSWORD}</code>. Pick one to
-              fill the form — the sign-in that follows is the real one.
-            </p>
-            <div className="grid grid-cols-2 gap-2.5">
-              {DEMO_OFFICERS.map((o) => (
-                <button
-                  key={o.email}
-                  type="button"
-                  onClick={() => pick(o.email)}
-                  className={`flex items-start gap-2.5 rounded-[11px] border-0 bg-white p-3 text-left transition-transform hover:-translate-y-0.5 ${
-                    email === o.email ? 'ring-2 ring-accent' : ''
-                  }`}
-                >
-                  <span
-                    className="grid h-8 w-8 flex-none place-items-center rounded-full text-[11px] font-extrabold text-white"
-                    style={{ background: o.colour }}
-                    aria-hidden="true"
+          {SHOW_DEMO_ACCOUNTS && (
+            <section>
+              <h2 className="m-0 text-[10.5px] font-extrabold uppercase tracking-[2px] text-[#8FA8CC]">
+                Demo accounts
+              </h2>
+              <p className="mb-3 mt-1.5 text-[12.5px] text-[#C5D4EA]">
+                Seeded officers, all with the password <code>{DEMO_PASSWORD}</code>. Pick one to
+                fill the form — the sign-in that follows is the real one.
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {DEMO_OFFICERS.map((o) => (
+                  <button
+                    key={o.email}
+                    type="button"
+                    onClick={() => pick(o.email)}
+                    className={`flex items-start gap-2.5 rounded-[11px] border-0 bg-white p-3 text-left transition-transform hover:-translate-y-0.5 ${
+                      email === o.email ? 'ring-2 ring-accent' : ''
+                    }`}
                   >
-                    {o.name.split(' ').map((w) => w[0]).join('')}
-                  </span>
-                  <span>
-                    <b className="block text-[12.5px] leading-tight text-navy">{o.name}</b>
-                    <small className="text-[11px] leading-snug text-muted">{o.role}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
+                    <span
+                      className="grid h-8 w-8 flex-none place-items-center rounded-full text-[11px] font-extrabold text-white"
+                      style={{ background: o.colour }}
+                      aria-hidden="true"
+                    >
+                      {o.name
+                        .split(' ')
+                        .map((w) => w[0])
+                        .join('')}
+                    </span>
+                    <span>
+                      <b className="block text-[12.5px] leading-tight text-navy">{o.name}</b>
+                      <small className="text-[11px] leading-snug text-muted">{o.role}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>
@@ -230,7 +286,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Problem({ children }: { children: React.ReactNode }) {
   return (
-    <p role="alert" className="mb-3 rounded-lg bg-[#FDF3F1] px-3 py-2.5 text-[12.5px] text-danger">
+    <p
+      role="alert"
+      className="mb-3 rounded-lg bg-[#FDF3F1] px-3 py-2.5 text-[12.5px] text-danger"
+    >
       {children}
     </p>
   );
