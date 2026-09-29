@@ -35,7 +35,6 @@ const base: AgendaDocumentData = {
     {
       ordinal: 1,
       text: 'Progress on package 3',
-      projectName: 'Project 1',
       isCarryBlock: false,
       isDeferred: false,
       carried: [],
@@ -123,10 +122,21 @@ describe('the draft watermark', () => {
 });
 
 describe('the agenda points', () => {
-  it('lists each point with its project', () => {
+  it('lists each point', () => {
     const html = render();
     expect(html).toContain('Progress on package 3');
-    expect(html).toContain('Project 1');
+  });
+
+  /*
+   * Both dropped on the client's instruction, and for the same reason: an
+   * agenda is a list of what will be discussed. Who typed the line in is
+   * administration, and the project is already in the header block — on a
+   * single-project meeting the column printed a dash against every row.
+   */
+  it('names neither who added a point nor its project', () => {
+    const html = render();
+    expect(html).not.toContain('Raised by');
+    expect(html).not.toContain('<th>Project</th>');
   });
 
   /*
@@ -172,7 +182,6 @@ describe('the carried-forward block', () => {
   const carried: AgendaDocumentData['items'][number] = {
     ordinal: 0,
     text: 'Review of items from previous meetings',
-    projectName: null,
     isCarryBlock: true,
     isDeferred: false,
     carried: [

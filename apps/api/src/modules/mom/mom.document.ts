@@ -122,26 +122,17 @@ export class MomDocumentService {
       circulatedAt: current?.circulatedAt ?? null,
     };
 
-    // Agenda points name who raised them, and the project they belong to —
-    // both need a lookup, so do it once rather than per row.
-    const projectIds = [...new Set(meeting.agenda.map((a) => a.projectId).filter(Boolean))] as string[];
-    const addedByIds = [
-      ...new Set([
-        ...meeting.agenda.map((a) => a.addedById),
-        ...meeting.documents.map((d) => d.uploadedById),
-      ]),
-    ];
-    const [projects, people] = await Promise.all([
-      this.prisma.project.findMany({
-        where: { id: { in: projectIds } },
-        select: { id: true, name: true },
-      }),
-      this.prisma.user.findMany({
-        where: { id: { in: addedByIds } },
-        select: { id: true, name: true },
-      }),
-    ]);
-    const projectName = new Map(projects.map((p) => [p.id, p.name]));
+    /*
+     * Annexures name who added them, so that lookup is still worth doing once
+     * rather than per row. The project lookup went with the column that
+     * printed it — section 2 lists the points, and the meeting's projects are
+     * already in the header block above it.
+     */
+    const addedByIds = [...new Set(meeting.documents.map((d) => d.uploadedById))];
+    const people = await this.prisma.user.findMany({
+      where: { id: { in: addedByIds } },
+      select: { id: true, name: true },
+    });
     const personName = new Map(people.map((p) => [p.id, p.name]));
 
     const data: MomDocumentData = {
@@ -178,7 +169,6 @@ export class MomDocumentService {
       agenda: meeting.agenda.map((a) => ({
         ordinal: a.ordinal,
         text: a.text,
-        projectName: a.projectId ? (projectName.get(a.projectId) ?? null) : null,
         addedByName: personName.get(a.addedById) ?? null,
         isCarryBlock: a.isCarryBlock,
         isDeferred: a.isDeferred,

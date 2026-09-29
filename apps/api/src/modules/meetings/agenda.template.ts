@@ -56,7 +56,6 @@ export interface AgendaDocumentData {
   items: {
     ordinal: number;
     text: string;
-    projectName: string | null;
     isCarryBlock: boolean;
     isDeferred: boolean;
     /**
@@ -200,14 +199,13 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
     points.length === 0
       ? '<p class="lede">No agenda points have been added yet.</p>'
       : `<table class="grid">
-    <thead><tr><th class="n">#</th><th>Agenda point</th><th>Project</th></tr></thead>
+    <thead><tr><th class="n">#</th><th>Agenda point</th></tr></thead>
     <tbody>
       ${points
         .map(
           (a) => `<tr${a.isDeferred ? ' class="deferred"' : ''}>
             <td class="n">${a.ordinal}</td>
             <td>${esc(a.text)}${a.isDeferred ? ' <span class="tag">deferred</span>' : ''}</td>
-            <td>${esc(a.projectName ?? '—')}</td>
           </tr>`,
         )
         .join('')}

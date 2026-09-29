@@ -73,7 +73,6 @@ export class AgendaDocumentService {
           select: {
             ordinal: true,
             text: true,
-            projectId: true,
             isCarryBlock: true,
             isDeferred: true,
             carriedItems: {
@@ -103,18 +102,6 @@ export class AgendaDocumentService {
       },
     });
     if (!meeting) throw AppError.notFound('That meeting');
-
-    // Agenda points name the project they belong to, so resolve those once
-    // rather than per row. The lookup of who added each point went with the
-    // column that printed it.
-    const projectIds = [
-      ...new Set(meeting.agenda.map((a) => a.projectId).filter(Boolean)),
-    ] as string[];
-    const projects = await this.prisma.project.findMany({
-      where: { id: { in: projectIds } },
-      select: { id: true, name: true },
-    });
-    const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
     const data: AgendaDocumentData = {
       meeting: {
@@ -146,7 +133,6 @@ export class AgendaDocumentService {
       items: meeting.agenda.map((a) => ({
         ordinal: a.ordinal,
         text: a.text,
-        projectName: a.projectId ? (projectName.get(a.projectId) ?? null) : null,
         isCarryBlock: a.isCarryBlock,
         isDeferred: a.isDeferred,
         carried: a.carriedItems.map((c) => ({

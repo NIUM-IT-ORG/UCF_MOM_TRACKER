@@ -55,7 +55,6 @@ export interface MomDocumentData {
   agenda: {
     ordinal: number;
     text: string;
-    projectName: string | null;
     addedByName: string | null;
     isCarryBlock: boolean;
     isDeferred: boolean;
@@ -206,7 +205,7 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
     data.agenda.length === 0
       ? '<p class="lede">No agenda was recorded for this meeting.</p>'
       : `<table class="grid">
-    <thead><tr><th class="n">#</th><th>Agenda item</th><th>Project</th></tr></thead>
+    <thead><tr><th class="n">#</th><th>Agenda item</th></tr></thead>
     <tbody>
       ${data.agenda
         .map(
@@ -219,7 +218,6 @@ ${watermark ? `<div class="watermark" aria-hidden="true"><span>${esc(watermark)}
                   ? ' <i>(deferred)</i>'
                   : ''
             }</td>
-            <td>${esc(a.projectName ?? '—')}</td>
           </tr>`,
         )
         .join('')}
