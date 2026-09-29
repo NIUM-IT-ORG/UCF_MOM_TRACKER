@@ -30,14 +30,6 @@ export const ROADMAP: Record<string, Planned> = {
     blurb:
       'Password plus an OTP, then a session whose capabilities are re-read from the database on every request — so an access change takes effect without anyone signing out.',
   },
-  '/access': {
-    phase: 1,
-    tickets: ['P1-06', 'P1-07'],
-    title: 'Access control',
-    blurb:
-      'The designation × capability matrix, and a checker that answers "what can this officer actually do, on which projects". Access is computed from designation and project mapping, never assigned per user.',
-    cap: 'manage_access',
-  },
   '/communications': {
     phase: 5,
     tickets: ['P5-11', 'P5-12'],
