@@ -69,6 +69,7 @@ export default function RegisterPage() {
    */
   const [ownerId, setOwnerId] = useState('');
   const [people, setPeople] = useState<{ id: string; name: string; designation: { name: string } }[]>([]);
+  const [raisedById, setRaisedById] = useState('');
   const [mine, setMine] = useState(false);
   const [overdue, setOverdue] = useState(false);
 
@@ -83,8 +84,9 @@ export default function RegisterPage() {
     // "Only mine" is still pressed otherwise silently returns your own items.
     if (ownerId) p.set('ownerId', ownerId);
     else if (mine && user) p.set('ownerId', user.id);
+    if (raisedById) p.set('raisedById', raisedById);
     return p.toString();
-  }, [type, status, projectId, q, overdue, mine, ownerId, user]);
+  }, [type, status, projectId, q, overdue, mine, ownerId, raisedById, user]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
@@ -216,7 +218,7 @@ export default function RegisterPage() {
       </div>
 
       <Card title="Filters" tag="Applied by the server, inside your project scope">
-        <div className="grid gap-3 px-[17px] py-3.5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 px-[17px] py-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <label className="block">
             <span className="mb-1 block text-[11px] font-bold text-navy">Type</span>
             <select className="i" value={type} onChange={(e) => setType(e.target.value)}>
@@ -270,6 +272,22 @@ export default function RegisterPage() {
                 // "Only mine" lit while somebody else is chosen would be a lie.
                 if (e.target.value) setMine(false);
               }}
+            >
+              <option value="">Anybody</option>
+              {people.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} — {o.designation.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-bold text-navy">Raised by</span>
+            <select
+              className="i"
+              value={raisedById}
+              onChange={(e) => setRaisedById(e.target.value)}
             >
               <option value="">Anybody</option>
               {people.map((o) => (

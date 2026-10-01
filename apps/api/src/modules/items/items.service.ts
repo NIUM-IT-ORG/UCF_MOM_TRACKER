@@ -74,6 +74,9 @@ export class ItemsService {
     if (query.type) where.type = query.type;
     if (query.meetingId) where.meetingId = query.meetingId;
     if (query.ownerId) where.owners = { some: { userId: query.ownerId } };
+    // A column on the item, not a relation: an item has one raiser and many
+    // owners, which is why this is an equality and the one above is a `some`.
+    if (query.raisedById) where.raisedById = query.raisedById;
     if (query.projectId) {
       if (!canSeeProject(user, query.projectId)) return [];
       where.projectId = query.projectId;

@@ -116,6 +116,14 @@ export const itemQueryDto = z.object({
   status: z.string().optional(),
   projectId: cuid.optional(),
   ownerId: cuid.optional(),
+  /**
+   * Who raised it — the mirror of `ownerId`.
+   *
+   * Both name a person on the item, and they answer opposite questions:
+   * `ownerId` is "what does this officer owe", `raisedById` is "what did this
+   * officer ask for". A chair reviewing their own meeting wants the second.
+   */
+  raisedById: cuid.optional(),
   meetingId: cuid.optional(),
   overdue: z.coerce.boolean().optional(),
   q: z.string().trim().optional(),
