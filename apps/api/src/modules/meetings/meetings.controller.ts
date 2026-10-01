@@ -33,6 +33,7 @@ import { externalInviteeDto } from './external-invitee.dto.js';
 import { AttendanceService } from './attendance.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
 import { htmlToPdf } from '../../common/print/print.js';
+import { toCsv, toHtml } from '../reports/render.js';
 import { RawResponse } from '../../common/interceptors/envelope.interceptor.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CapabilityGuard } from '../auth/capability.guard.js';
@@ -74,6 +75,72 @@ export class MeetingsController {
     @Query('to') to?: string,
   ) {
     return this.meetings.list(user, { type, category, projectId, stage, q, from, to });
+  }
+
+  /**
+   * The same list, as a file.
+   *
+   * Declared before `:id` deliberately — Express matches in order, and
+   * `/meetings/export` would otherwise be read as a meeting whose id is
+   * "export".
+   *
+   * One table, three renderings, the same ones the reports module uses:
+   * `csv` for a spreadsheet, `pdf` printed by the browser already on the
+   * server, `html` for the page that PDF is printed from. The rows come from
+   * the same `list` the screen calls, so an export can never disagree with
+   * what it was taken from.
+   */
+  @Get('export')
+  @RawResponse()
+  async export(
+    @CurrentUser() user: AuthUser,
+    // `@Res()` without `passthrough`, and the handler writes every branch
+    // itself. Nest replies to a returned object with `res.json()`, and a
+    // Buffer is an object — which is how a PDF once went out as
+    // `{"type":"Buffer","data":[…]}` under a PDF content type. See
+    // common/print/content-type.spec.ts, which failed on this exact handler.
+    @Res() res: Response,
+    @Query('format') format?: string,
+    @Query('type') type?: string,
+    @Query('category') category?: string,
+    @Query('projectId') projectId?: string,
+    @Query('stage') stage?: string,
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ): Promise<void> {
+    const table = await this.meetings.exportTable(user, {
+      type,
+      category,
+      projectId,
+      stage,
+      q,
+      from,
+      to,
+    });
+    const stamp = table.generatedAt.slice(0, 10);
+
+    if (format === 'csv') {
+      res.setHeader('content-type', 'text/csv; charset=utf-8');
+      res.setHeader('content-disposition', `attachment; filename="ucf-meetings-${stamp}.csv"`);
+      // The BOM is what stops Excel on Windows reading a UTF-8 file as the
+      // ANSI codepage and turning a name with an accent into mojibake.
+      res.send('\uFEFF' + toCsv(table));
+      return;
+    }
+
+    const html = toHtml(table, `${user.name} · ${user.designationCode}`);
+
+    if (format === 'pdf') {
+      const bytes = await htmlToPdf(html);
+      res.setHeader('content-type', 'application/pdf');
+      res.setHeader('content-disposition', `inline; filename="ucf-meetings-${stamp}.pdf"`);
+      res.send(Buffer.from(bytes));
+      return;
+    }
+
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.send(html);
   }
 
   @Get(':id')

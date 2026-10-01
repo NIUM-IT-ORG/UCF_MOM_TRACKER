@@ -12,11 +12,10 @@ import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useProjectOptions } from '@/lib/projects';
 import { formatDate } from '@/lib/format';
-import { nextStep, timeRange, type MeetingRow } from '@/lib/meetings';
+import { timeRange, type MeetingRow } from '@/lib/meetings';
 import {
   Card,
   Empty,
-  MomChip,
   PageHead,
   ProjectTag,
   StageChip,
@@ -123,6 +122,25 @@ export default function MeetingsPage() {
     const qs = next.toString();
     router.replace(qs ? `/meetings?${qs}` : '/meetings', { scroll: false });
   }, [router, view, type, category, projectId, from, to, q]);
+
+  /**
+   * The export carries the filters in force, so what you see is what you get.
+   *
+   * It is a plain link rather than a fetch: the browser handles the download,
+   * the Content-Disposition names the file, and a PDF opens in the viewer —
+   * none of which is worth reimplementing with blobs.
+   */
+  function exportHref(format: 'csv' | 'pdf'): string {
+    const out = new URLSearchParams({ format });
+    if (stages) out.set('stage', stages);
+    if (type) out.set('type', type);
+    if (category) out.set('category', category);
+    if (projectId) out.set('projectId', projectId);
+    if (from) out.set('from', from);
+    if (to) out.set('to', to);
+    if (q.trim()) out.set('q', q.trim());
+    return `/api/v1/meetings/export?${out.toString()}`;
+  }
 
   const canPlan = caps.includes('plan_scheduled') || caps.includes('plan_instant');
 
@@ -254,6 +272,17 @@ export default function MeetingsPage() {
                 Clear
               </button>
             )}
+            {/*
+              * Downloads what is on screen, filters and all. CSV opens in
+              * Excel — it carries a byte-order mark so Windows reads it as
+              * UTF-8 rather than the ANSI codepage.
+              */}
+            <a className="btn-ghost" href={exportHref('csv')}>
+              CSV
+            </a>
+            <a className="btn-ghost" href={exportHref('pdf')} target="_blank" rel="noreferrer">
+              PDF
+            </a>
           </span>
         </div>
       </Card>
@@ -280,11 +309,9 @@ export default function MeetingsPage() {
                   <tr>
                     <th>Reference</th>
                     <th>Meeting</th>
-                    <th>When</th>
+                    <th>Date</th>
                     <th>Projects</th>
                     <th>Stage</th>
-                    <th>MoM</th>
-                    <th>Next step</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -313,17 +340,26 @@ export default function MeetingsPage() {
                         <small className="mt-0.5 block text-[11px] text-muted">{timeRange(m)}</small>
                       </td>
                       <td>
-                        <span className="flex flex-wrap gap-1">
+                        {/*
+                          * The full name, not the code. A reader who does not
+                          * already know that EAP02 is the Eastern Area
+                          * Programme learns nothing from the chip, and this is
+                          * the list people are sent. The code stays on the
+                          * tag's colour, which is what makes a row scannable
+                          * once you do know them.
+                          */}
+                        <span className="flex flex-wrap items-center gap-1.5">
                           {m.projects.map((p) => (
-                            <ProjectTag key={p.project.id} code={p.project.code} />
+                            <span key={p.project.id} className="flex items-center gap-1">
+                              <ProjectTag code={p.project.code} />
+                              <span className="text-[11.5px] text-ink">{p.project.name}</span>
+                            </span>
                           ))}
                         </span>
                       </td>
                       <td>
                         <StageChip stage={m.stage} />
                       </td>
-                      <td>{m.moms[0] ? <MomChip state={m.moms[0].state} /> : <span className="text-muted">—</span>}</td>
-                      <td className="text-[12px] text-muted">{nextStep(m)}</td>
                     </tr>
                   ))}
                 </tbody>

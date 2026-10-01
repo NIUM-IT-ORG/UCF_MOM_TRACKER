@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type {
-  CancelDto,
-  CreateMeetingDto,
-  MeetingStage,
-  RescheduleDto,
-  UpdateMeetingDto,
+import {
+  MEETING_CATEGORY_LABEL,
+  MEETING_STAGE_LABEL,
+  MEETING_TYPE_LABEL,
+  type CancelDto,
+  type CreateMeetingDto,
+  type MeetingStage,
+  type RescheduleDto,
+  type UpdateMeetingDto,
 } from '@mom/shared';
+import type { ReportTable } from '../reports/reports.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { canSeeProject, meetingScope, scopedProjectIds } from '../../common/scope.js';
@@ -54,6 +58,23 @@ export interface MeetingQuery {
   to?: string;
 }
 
+/**
+ * What the export was narrowed to, in words.
+ *
+ * A spreadsheet that does not say which filters produced it is one somebody
+ * will later mistake for the whole list — and the figure at the top of a note
+ * to a Mission Director is exactly where that goes wrong.
+ */
+function describeFilters(query: MeetingQuery): string {
+  const parts: string[] = [];
+  if (query.stage) parts.push(`stage ${query.stage.split(',').join(' or ')}`);
+  if (query.type) parts.push(`${query.type.toLowerCase()} meetings`);
+  if (query.category) parts.push(`category ${query.category}`);
+  if (query.projectId) parts.push('one project');
+  if (query.q) parts.push(`matching "${query.q}"`);
+  return parts.length > 0 ? parts.join(', ') : 'nothing — this is the full list';
+}
+
 @Injectable()
 export class MeetingsService {
   constructor(
@@ -94,6 +115,75 @@ export class MeetingsService {
       select: LIST_SELECT,
       orderBy: [{ meetingDate: 'desc' }, { startTime: 'desc' }],
     });
+  }
+
+  /**
+   * The same filtered list, shaped for export.
+   *
+   * It reuses `list` rather than querying again, so a spreadsheet can never
+   * disagree with the screen it was taken from — the filters, the scope and
+   * the ordering are all one code path. `ReportTable` is the shape the
+   * reports module already renders as CSV, as a printable page and as a PDF,
+   * which is the same reason: one set of rows, three renderers, no drift.
+   *
+   * An export carries more columns than the screen does. A table on a page
+   * has to stay scannable and drops to what a coordinator needs at a glance;
+   * a spreadsheet has no such limit, and the first thing anybody does with
+   * one is sort by a column the screen left out.
+   */
+  async exportTable(user: AuthUser, query: MeetingQuery = {}): Promise<ReportTable> {
+    const rows = await this.list(user, query);
+
+    const span =
+      query.from || query.to
+        ? ` · ${query.from ?? 'the beginning'} to ${query.to ?? 'today'}`
+        : '';
+
+    return {
+      key: 'meetings',
+      title: 'Meetings',
+      lede:
+        'Every meeting matching the filters in force when this was taken, newest first.' +
+        ' Scope is that of whoever took it: a project they cannot see is not in it.',
+      columns: [
+        { key: 'code', label: 'Reference' },
+        { key: 'title', label: 'Meeting' },
+        { key: 'date', label: 'Date' },
+        { key: 'time', label: 'Time' },
+        { key: 'type', label: 'Type' },
+        { key: 'category', label: 'Category' },
+        { key: 'projects', label: 'Projects' },
+        { key: 'venue', label: 'Venue' },
+        { key: 'chair', label: 'Chairperson' },
+        { key: 'stage', label: 'Stage' },
+        { key: 'agenda', label: 'Agenda points', numeric: true },
+        { key: 'invitees', label: 'Invitees', numeric: true },
+        { key: 'items', label: 'Actions & clarifications', numeric: true },
+      ],
+      rows: rows.map((m) => ({
+        code: m.code,
+        title: m.title,
+        // ISO, not the screen's "26 Jun 2026": a spreadsheet sorts this
+        // correctly and a human still reads it.
+        date: m.meetingDate.toISOString().slice(0, 10),
+        time: `${m.startTime}-${m.endTime}`,
+        type: MEETING_TYPE_LABEL[m.type],
+        category: MEETING_CATEGORY_LABEL[m.category],
+        projects: m.projects.map((p) => p.project.name).join('; '),
+        venue: m.venue,
+        chair: m.chair?.name ?? '',
+        stage: MEETING_STAGE_LABEL[m.stage],
+        agenda: m._count.agenda,
+        invitees: m._count.invitees,
+        items: m._count.items,
+      })),
+      summary: [
+        { label: 'Meetings', value: rows.length },
+        { label: 'Instant', value: rows.filter((m) => m.type === 'INSTANT').length },
+        { label: 'Filtered by', value: describeFilters(query) + span },
+      ],
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   /** The full aggregate behind the five tabs. */
