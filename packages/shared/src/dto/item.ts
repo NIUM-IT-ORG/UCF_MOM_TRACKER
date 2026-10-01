@@ -86,6 +86,17 @@ export const updateItemDto = z
      * edit to a document people have already read.
      */
     respondedById: cuid.optional(),
+    /**
+     * Who raised it.
+     *
+     * The coordinator minutes on behalf of the room, so the wrong name here
+     * is an ordinary slip — and the one correction that was impossible, since
+     * it is set at creation and nothing could change it. Like the responder,
+     * the service allows it only while the item is inert: the action and
+     * clarification tables of the MoM both print "Raised by", so altering it
+     * afterwards edits a document people have read.
+     */
+    raisedById: cuid.optional(),
   })
   .strict();
 export type UpdateItemDto = z.infer<typeof updateItemDto>;

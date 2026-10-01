@@ -37,6 +37,13 @@ export function EditItem({
 
   const [description, setDescription] = useState(item.description);
   const [remarks, setRemarks] = useState(item.remarks ?? '');
+  /*
+   * Who raised it. The coordinator minutes on behalf of the room, so the
+   * wrong name here is an ordinary slip — and it was the one correction that
+   * could not be made, because it is set at creation and nothing could
+   * change it afterwards.
+   */
+  const [raisedById, setRaisedById] = useState(item.raisedBy?.id ?? '');
   const [dueDate, setDueDate] = useState(item.dueDate ? item.dueDate.slice(0, 10) : '');
   const [priority, setPriority] = useState<Priority>((item.priority ?? 'MEDIUM') as Priority);
   const [owners, setOwners] = useState<string[]>(item.owners.map((o) => o.user.id));
@@ -88,6 +95,11 @@ export function EditItem({
           remarks: remarks.trim(),
           ...(isAction ? { dueDate, priority } : {}),
           ...(!isAction && responder[0] ? { respondedById: responder[0] } : {}),
+          // Only when it has moved, and only while inert: the minutes name
+          // who raised an item, so the server refuses after circulation.
+          ...(raisedById && raisedById !== item.raisedBy?.id && !item.isActive
+            ? { raisedById }
+            : {}),
         }),
       });
 
@@ -145,6 +157,35 @@ export function EditItem({
             somebody has been given. The server will refuse changes that would rewrite it.
           </Notice>
         )}
+
+        <Field
+          label="Raised by"
+          required
+          hint={
+            item.isActive
+              ? 'The minutes name who raised this, so it is fixed once circulated.'
+              : 'Whoever asked for it in the room, not whoever is typing.'
+          }
+        >
+          <select
+            className="i"
+            value={raisedById}
+            disabled={item.isActive}
+            onChange={(e) => setRaisedById(e.target.value)}
+          >
+            {/* Until /users answers, the current raiser is the only option —
+                better than an empty select that looks like data loss. */}
+            {people.length === 0 && item.raisedBy && (
+              <option value={item.raisedBy.id}>{item.raisedBy.name}</option>
+            )}
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} - {p.designation.name}
+                {p.attended ? ' (in the room)' : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label={isAction ? 'What is to be done' : 'What needs clarifying'} required>
           <textarea

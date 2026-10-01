@@ -402,6 +402,18 @@ export class ItemsService {
       }
     }
 
+    /*
+     * Both tables in section 5 and 6 of the MoM print "Raised by", so once
+     * the document has been circulated this is no longer a drafting fix —
+     * it is an edit to a page somebody has already read.
+     */
+    if (dto.raisedById && item.activatedAt) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `${item.ref} has been circulated, and the minutes name who raised it. That cannot be changed now.`,
+      );
+    }
+
     if (item.type === 'CLARIFICATION' && (dto.dueDate || dto.priority)) {
       // Rejected rather than silently stripped: dropping a date somebody typed
       // is how people stop trusting a form.
@@ -422,6 +434,7 @@ export class ItemsService {
           ...(dto.dueDate ? { dueDate: new Date(dto.dueDate) } : {}),
           ...(dto.priority ? { priority: dto.priority } : {}),
           ...(dto.respondedById ? { respondedById: dto.respondedById } : {}),
+          ...(dto.raisedById ? { raisedById: dto.raisedById } : {}),
           // Revising the date forward is what brings a delayed item back — the
           // work is on track again, and the register should say so.
           ...(revising ? { actionStatus: advanceAction('DELAYED', 'reviseDue') } : {}),
