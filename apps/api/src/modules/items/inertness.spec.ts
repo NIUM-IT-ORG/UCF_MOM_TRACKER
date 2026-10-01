@@ -90,6 +90,23 @@ describe('every liveness check asks activatedAt', () => {
   it('derives isActive from activatedAt for every row it returns', () => {
     expect(service).toMatch(/isActive: item\.activatedAt !== null/);
   });
+
+  /*
+   * The register was printing "8 days late" against rows it had just labelled
+   * NOT YET LIVE — the product contradicting itself on one line. An inert
+   * item has had no clock running: nobody has been told, no reminder has gone
+   * out, nobody has been asked for anything. A due date that has passed means
+   * the minuting is behind, not the officer.
+   */
+  it('ages nothing that has not been circulated', () => {
+    expect(code(service)).toMatch(/item\.activatedAt \? daysOverdue\(/);
+  });
+
+  it('keeps the overdue filter to live items, so the column and the filter agree', () => {
+    const stripped = code(service);
+    const filter = stripped.slice(stripped.indexOf('if (query.overdue)'));
+    expect(filter.slice(0, 260)).toMatch(/where\.activatedAt = \{ not: null \}/);
+  });
 });
 
 /** The source with comments removed, so an assertion cannot match a remark. */

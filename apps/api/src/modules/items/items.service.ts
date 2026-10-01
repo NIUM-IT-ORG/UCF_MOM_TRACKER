@@ -106,6 +106,8 @@ export class ItemsService {
     if (query.overdue) {
       where.dueDate = { lt: new Date() };
       where.actionStatus = { in: ['IN_PROGRESS', 'DELAYED'] };
+      // Same rule as the ageing column: nothing is late until it is live.
+      where.activatedAt = { not: null };
     }
     if (query.q) {
       where.AND = [
@@ -797,7 +799,17 @@ export class ItemsService {
 function decorate<T extends { dueDate: Date | null; actionStatus: string | null; activatedAt: Date | null }>(
   item: T,
 ) {
-  const overdue = daysOverdue(item.dueDate, new Date());
+  /*
+   * An inert item cannot be late.
+   *
+   * `activatedAt` is what starts the clock: until the signed MoM is
+   * circulated nobody has been told, no reminder has gone out and no officer
+   * has been asked for anything — so a due date that has passed means the
+   * minuting is behind, not the officer. The register was printing "8 days
+   * late" against items marked NOT YET LIVE on the same row, which is the
+   * product contradicting itself on one line.
+   */
+  const overdue = item.activatedAt ? daysOverdue(item.dueDate, new Date()) : 0;
   return {
     ...item,
     daysOverdue: overdue,

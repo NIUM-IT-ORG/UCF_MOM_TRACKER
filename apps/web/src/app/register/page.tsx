@@ -58,6 +58,17 @@ export default function RegisterPage() {
   const [status, setStatus] = useState('');
   const [projectId, setProjectId] = useState('');
   const [q, setQ] = useState('');
+  /*
+   * Who is responsible, as a filter.
+   *
+   * The server has taken `ownerId` since Phase 4 — "Only mine" was that
+   * filter pinned to the signed-in officer — so this is the same query
+   * opened up to anybody. "Who still owes me something" is the question a
+   * coordinator arrives at this register with, and it could only be answered
+   * about oneself.
+   */
+  const [ownerId, setOwnerId] = useState('');
+  const [people, setPeople] = useState<{ id: string; name: string; designation: { name: string } }[]>([]);
   const [mine, setMine] = useState(false);
   const [overdue, setOverdue] = useState(false);
 
@@ -68,9 +79,12 @@ export default function RegisterPage() {
     if (projectId) p.set('projectId', projectId);
     if (q.trim()) p.set('q', q.trim());
     if (overdue) p.set('overdue', 'true');
-    if (mine && user) p.set('ownerId', user.id);
+    // An explicit choice wins over the shortcut: picking somebody else while
+    // "Only mine" is still pressed otherwise silently returns your own items.
+    if (ownerId) p.set('ownerId', ownerId);
+    else if (mine && user) p.set('ownerId', user.id);
     return p.toString();
-  }, [type, status, projectId, q, overdue, mine, user]);
+  }, [type, status, projectId, q, overdue, mine, ownerId, user]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
@@ -90,6 +104,9 @@ export default function RegisterPage() {
   }, [load]);
 
   useEffect(() => {
+    api<{ id: string; name: string; designation: { name: string } }[]>('/users')
+      .then(setPeople)
+      .catch(() => setPeople([]));
     api<ProjectOption[]>('/projects')
       .then(setProjects)
       .catch(() => setProjects([]));
@@ -243,6 +260,27 @@ export default function RegisterPage() {
           </label>
 
           <label className="block">
+            <span className="mb-1 block text-[11px] font-bold text-navy">Responsible</span>
+            <select
+              className="i"
+              value={ownerId}
+              onChange={(e) => {
+                setOwnerId(e.target.value);
+                // The shortcut and the picker are the same filter, so leaving
+                // "Only mine" lit while somebody else is chosen would be a lie.
+                if (e.target.value) setMine(false);
+              }}
+            >
+              <option value="">Anybody</option>
+              {people.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} — {o.designation.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
             <span className="mb-1 block text-[11px] font-bold text-navy">Search</span>
             <input
               className="i"
@@ -257,7 +295,12 @@ export default function RegisterPage() {
               type="button"
               aria-pressed={mine}
               className={mine ? 'btn-primary' : 'btn-ghost'}
-              onClick={() => setMine((v) => !v)}
+              onClick={() => {
+                // Clears the picker, for the same reason the picker clears
+                // this: one filter, one answer on screen.
+                setMine((v) => !v);
+                setOwnerId('');
+              }}
             >
               Only mine
             </button>
