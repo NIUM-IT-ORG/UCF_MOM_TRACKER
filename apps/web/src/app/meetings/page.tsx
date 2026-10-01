@@ -312,6 +312,22 @@ export default function MeetingsPage() {
                     <th>Date</th>
                     <th>Projects</th>
                     <th>Stage</th>
+                    {/*
+                      * Three counts, already on the list response — no extra
+                      * query. Abbreviated headers with the full wording on
+                      * hover: spelled out they are wider than the numbers
+                      * under them, and this table is read by scanning down a
+                      * column rather than across a row.
+                      */}
+                    <th className="text-right" title="Agenda points">
+                      Agenda
+                    </th>
+                    <th className="text-right" title="Invitees">
+                      Invited
+                    </th>
+                    <th className="text-right" title="Actions &amp; clarifications arising">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -359,6 +375,21 @@ export default function MeetingsPage() {
                       </td>
                       <td>
                         <StageChip stage={m.stage} />
+                      </td>
+                      <td className="text-right tabular-nums">{m._count.agenda}</td>
+                      <td className="text-right tabular-nums">{m._count.invitees}</td>
+                      {/*
+                        * A dash, not a nought. A meeting that produced nothing
+                        * and one that produced nothing *yet* look identical as
+                        * "0", and the eye stops on a dash in a column of
+                        * figures — which is the point of having the column.
+                        */}
+                      <td className="text-right tabular-nums">
+                        {m._count.items > 0 ? (
+                          <b className="text-navy">{m._count.items}</b>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
