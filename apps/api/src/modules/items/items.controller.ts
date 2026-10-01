@@ -8,8 +8,10 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   createItemDto,
   itemQueryDto,
@@ -20,6 +22,9 @@ import {
   updateItemDto,
 } from '@mom/shared';
 import { ItemsService } from './items.service.js';
+import { toCsv, toHtml } from '../reports/render.js';
+import { htmlToPdf } from '../../common/print/print.js';
+import { RawResponse } from '../../common/interceptors/envelope.interceptor.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { CapabilityGuard } from '../auth/capability.guard.js';
 import { RequireCapability } from '../auth/require-capability.decorator.js';
@@ -34,6 +39,49 @@ export class ItemsController {
   @Get()
   list(@CurrentUser() user: AuthUser, @Query() query: Record<string, string>) {
     return this.items.list(user, itemQueryDto.parse(query));
+  }
+
+  /**
+   * The register as a file.
+   *
+   * Before `:id` deliberately — Express matches in order, and
+   * `/items/export` would otherwise be read as an item whose id is "export".
+   *
+   * `@Res()` without `passthrough`, writing every branch: Nest replies to a
+   * returned object with `res.json()`, and a Buffer is an object. That is
+   * what once sent a PDF as `{"type":"Buffer","data":[...]}`.
+   */
+  @Get('export')
+  @RawResponse()
+  async export(
+    @CurrentUser() user: AuthUser,
+    @Res() res: Response,
+    @Query() query: Record<string, string>,
+  ): Promise<void> {
+    const { format, ...filters } = query;
+    const table = await this.items.exportTable(user, itemQueryDto.parse(filters));
+    const stamp = table.generatedAt.slice(0, 10);
+
+    if (format === 'csv') {
+      res.setHeader('content-type', 'text/csv; charset=utf-8');
+      res.setHeader('content-disposition', `attachment; filename="ucf-register-${stamp}.csv"`);
+      // The BOM stops Excel on Windows reading UTF-8 as the ANSI codepage.
+      res.send('\uFEFF' + toCsv(table));
+      return;
+    }
+
+    const html = toHtml(table, `${user.name} · ${user.designationCode}`);
+
+    if (format === 'pdf') {
+      const bytes = await htmlToPdf(html);
+      res.setHeader('content-type', 'application/pdf');
+      res.setHeader('content-disposition', `inline; filename="ucf-register-${stamp}.pdf"`);
+      res.send(Buffer.from(bytes));
+      return;
+    }
+
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.send(html);
   }
 
   @Get(':id')

@@ -117,66 +117,20 @@ export default function RegisterPage() {
   const actions = (items ?? []).filter((i) => i.type === 'ACTION');
   const clarifications = (items ?? []).filter((i) => i.type === 'CLARIFICATION');
 
-  function exportCsv() {
-    const rows = items ?? [];
-    const cell = (v: unknown) => {
-      const s = v === null || v === undefined ? '' : String(v);
-      // Quote everything: a description with a comma in it is the common case,
-      // and a spreadsheet that splits one row into two is worse than no export.
-      return `"${s.replace(/"/g, '""')}"`;
-    };
-    const csv = [
-      [
-        'Ref',
-        'Type',
-        'Description',
-        'Project',
-        'Raised in',
-        'Responsible / responded',
-        'Due',
-        'Priority',
-        'Status',
-        'Ageing',
-        'Live',
-        'Remarks',
-      ].join(','),
-      ...rows.map((i) =>
-        [
-          i.ref,
-          i.type === 'ACTION' ? 'Action' : 'Clarification',
-          i.description,
-          `${i.project.code} — ${i.project.name}`,
-          i.meeting.code,
-          i.type === 'ACTION'
-            ? i.owners.map((o) => o.user.name).join('; ')
-            : (i.respondedBy?.name ?? ''),
-          i.dueDate ? i.dueDate.slice(0, 10) : '',
-          i.priority ? PRIORITY_LABEL[i.priority] : '',
-          i.type === 'ACTION'
-            ? i.actionStatus
-              ? ACTION_STATUS_LABEL[i.actionStatus]
-              : ''
-            : i.clarificationStatus
-              ? CLARIFICATION_STATUS_LABEL[i.clarificationStatus]
-              : '',
-          ageing(i),
-          i.isActive ? 'yes' : 'not yet circulated',
-          i.remarks ?? '',
-        ]
-          .map(cell)
-          .join(','),
-      ),
-    ].join('\r\n');
-
-    // A BOM, because Excel on Windows reads a UTF-8 CSV as the ANSI codepage
-    // otherwise and turns ₹ and the en dashes into mojibake.
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ucf-register-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /**
+   * Export whatever is filtered, from the server.
+   *
+   * This was a second CSV builder living in this page, with its own quoting,
+   * its own BOM and its own column list — a column added to one and not the
+   * other was only a matter of time. The rows now come from the same `list`
+   * the screen calls, rendered by the same `toCsv`/`toHtml` the reports use,
+   * which is also what makes a PDF possible at all.
+   *
+   * Plain links: the browser handles the download, the Content-Disposition
+   * names the file, and a PDF opens in the viewer.
+   */
+  function exportHref(format: 'csv' | 'pdf'): string {
+    return `/api/v1/items/export?${query ? `${query}&` : ''}format=${format}`;
   }
 
   return (
@@ -186,14 +140,19 @@ export default function RegisterPage() {
         title="Action & clarification register"
         lede="Everything raised in any meeting, in one list. Actions run In Progress → Under Review → Completed; clarifications run Open → Responded → Closed."
         actions={
-          <button
-            className="btn-ghost"
-            type="button"
-            disabled={!items || items.length === 0}
-            onClick={exportCsv}
-          >
-            Export CSV
-          </button>
+          <>
+            <a className="btn-ghost" href={exportHref('csv')}>
+              Export CSV
+            </a>
+            <a
+              className="btn-ghost"
+              href={exportHref('pdf')}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Export PDF
+            </a>
+          </>
         }
       />
 

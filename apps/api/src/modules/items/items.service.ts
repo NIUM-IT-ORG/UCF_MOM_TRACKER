@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ACTION_STATUS_LABEL,
   ACTION_STATUS_ORDER,
+  CLARIFICATION_STATUS_LABEL,
   CLARIFICATION_STATUS_ORDER,
+  PRIORITY_LABEL,
   type ActionStatus,
   type ClarificationStatus,
 } from '@mom/shared';
@@ -15,6 +18,7 @@ import type {
   SetOwnersDto,
   UpdateItemDto,
 } from '@mom/shared';
+import type { ReportTable } from '../reports/reports.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { canSeeProject, projectScope } from '../../common/scope.js';
@@ -147,6 +151,85 @@ export class ItemsService {
       orderBy: [{ createdAt: 'desc' }, { ref: 'desc' }],
     });
     return rows.map((r) => decorate(r));
+  }
+
+  /**
+   * The same filtered register, shaped for export.
+   *
+   * It reuses `list`, so a spreadsheet cannot disagree with the screen it was
+   * taken from — the filters, the project scope and the ordering are one code
+   * path. `ReportTable` is the shape the reports module already renders as
+   * CSV, as a printable page and as a PDF: one set of rows, three renderers.
+   *
+   * This replaces a second CSV builder that lived in the register page, with
+   * its own quoting and its own column list. Two implementations of the same
+   * export is how a column gets added to one and not the other.
+   */
+  async exportTable(user: AuthUser, query: ItemQueryDto = {}): Promise<ReportTable> {
+    const rows = await this.list(user, query);
+
+    const statusOf = (i: (typeof rows)[number]) =>
+      i.type === 'ACTION'
+        ? i.actionStatus
+          ? ACTION_STATUS_LABEL[i.actionStatus]
+          : ''
+        : i.clarificationStatus
+          ? CLARIFICATION_STATUS_LABEL[i.clarificationStatus]
+          : '';
+
+    return {
+      key: 'register',
+      title: 'Action and clarification register',
+      lede:
+        'Everything raised in any meeting, matching the filters in force when this was taken.' +
+        ' Scope is that of whoever took it: a project they cannot see is not in it.',
+      columns: [
+        { key: 'ref', label: 'Item' },
+        { key: 'kind', label: 'Type' },
+        { key: 'description', label: 'Description' },
+        { key: 'project', label: 'Project' },
+        { key: 'meeting', label: 'Raised in' },
+        { key: 'raisedBy', label: 'Raised by' },
+        { key: 'responsible', label: 'Responsible / responded' },
+        { key: 'due', label: 'Due' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'status', label: 'Status' },
+        { key: 'ageing', label: 'Days late', numeric: true },
+        { key: 'live', label: 'Circulated' },
+        { key: 'remarks', label: 'Remarks' },
+      ],
+      rows: rows.map((i) => ({
+        ref: i.ref,
+        kind: i.type === 'ACTION' ? 'Action' : 'Clarification',
+        description: i.description,
+        project: `${i.project.code} - ${i.project.name}`,
+        meeting: i.meeting.code,
+        raisedBy: i.raisedBy?.name ?? '',
+        responsible:
+          i.type === 'ACTION'
+            ? i.owners.map((o) => o.user.name).join('; ')
+            : (i.respondedBy?.name ?? ''),
+        // ISO, so a spreadsheet sorts it and a person still reads it.
+        due: i.dueDate ? i.dueDate.toISOString().slice(0, 10) : '',
+        priority: i.priority ? PRIORITY_LABEL[i.priority] : '',
+        status: statusOf(i),
+        // Already zero for anything not circulated - see `decorate`.
+        ageing: i.daysOverdue,
+        live: i.isActive ? 'yes' : 'not yet circulated',
+        remarks: i.remarks ?? '',
+      })),
+      summary: [
+        { label: 'Items', value: rows.length },
+        { label: 'Actions', value: rows.filter((i) => i.type === 'ACTION').length },
+        { label: 'Clarifications', value: rows.filter((i) => i.type === 'CLARIFICATION').length },
+        {
+          label: 'Not yet circulated',
+          value: rows.filter((i) => !i.isActive).length,
+        },
+        { label: 'Overdue', value: rows.filter((i) => i.daysOverdue > 0).length },
+      ],
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   async get(user: AuthUser, id: string) {
