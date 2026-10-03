@@ -983,6 +983,36 @@ function MomTab({
   canGenerate: boolean;
   onGenerated: () => void;
 }) {
+  const router = useRouter();
+  const { caps } = useSession();
+  const [opening, setOpening] = useState(false);
+  const [corrigendumError, setCorrigendumError] = useState<string | null>(null);
+
+  /*
+   * Opening a corrigendum lived only on the approval console, which is not
+   * where anyone looks for it: the coordinator reading the circulated MoM is
+   * on this tab, and the route out was a button on another screen that does
+   * not say what it is for. Same endpoint, same capability, same refusal if
+   * the MoM has not been circulated — just offered where the question is
+   * asked.
+   */
+  async function openCorrigendum() {
+    setOpening(true);
+    setCorrigendumError(null);
+    try {
+      await api(`/meetings/${meeting.id}/mom/corrigendum`, { method: 'POST' });
+      // Straight to the editor: the corrigendum unlocks the minutes, and
+      // correcting them is the only reason to have opened one.
+      router.push(`/meetings/${meeting.id}/minutes`);
+    } catch (err) {
+      setCorrigendumError(
+        err instanceof ApiError ? err.display : 'The corrigendum could not be opened.',
+      );
+    } finally {
+      setOpening(false);
+    }
+  }
+
   // "No MoM yet" is a step, not a dead end. Whoever is looking at this tab is
   // trying to produce one, so the button to do it belongs here — with the two
   // things it needs stated plainly, because the server refuses without them.
@@ -1038,7 +1068,31 @@ function MomTab({
                 Signed scan
               </a>
             )}
+            {mom.state === 'SIGNED' && caps.includes('record_minutes') && (
+              <button
+                className="btn-ghost"
+                type="button"
+                disabled={opening}
+                onClick={() => void openCorrigendum()}
+              >
+                {opening ? 'Opening…' : 'Issue a corrigendum'}
+              </button>
+            )}
           </div>
+
+          {corrigendumError && (
+            <div className="mt-3">
+              <Notice tone="red">{corrigendumError}</Notice>
+            </div>
+          )}
+
+          {mom.state === 'SIGNED' && caps.includes('record_minutes') && (
+            <p className="mb-0 mt-3 text-[11.5px] text-muted">
+              This version has been circulated, so it cannot be changed. A corrigendum opens
+              version {mom.version + 1} as a draft, unlocks the minutes and re-merges every
+              annexure on file — this one stays exactly as people received it.
+            </p>
+          )}
           <MomPreview meetingId={meeting.id} label={`The document · version ${mom.version}`} />
 
           <p className="mb-0 mt-3 text-[11.5px] text-muted">
