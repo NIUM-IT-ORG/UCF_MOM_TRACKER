@@ -36,6 +36,21 @@ export class DocumentsService {
     return this.withUploaders(rows);
   }
 
+  /**
+   * Papers tabled at a meeting, newest first.
+   *
+   * Each row carries `afterCirculation`. Documents may be filed at any point
+   * in a meeting's life — before it is held, while the MoM is with the
+   * approver, and long after it has been circulated, because that is when the
+   * revised estimate or the countersigned letter actually arrives. What must
+   * not happen is the system implying all of them are in the signed PDF.
+   *
+   * The merge runs at circulation, so anything filed after that moment is on
+   * record here but is not in the copy people are holding. The flag says so,
+   * and the screens say what to do about it: a corrigendum re-merges the full
+   * set, which is how a late annexure becomes part of the minutes rather than
+   * an attachment somebody has to be told about separately.
+   */
   async listForMeeting(user: AuthUser, meetingId: string) {
     const meeting = await this.prisma.meeting.findFirst({
       where: { AND: [{ id: meetingId }, meetingScope(user)] },
@@ -43,12 +58,28 @@ export class DocumentsService {
     });
     if (!meeting) throw AppError.notFound('That meeting');
 
-    const rows = await this.prisma.document.findMany({
-      where: { meetingId },
-      select: DOC_SELECT,
-      orderBy: { createdAt: 'desc' },
-    });
-    return this.withUploaders(rows);
+    const [rows, circulated] = await Promise.all([
+      this.prisma.document.findMany({
+        where: { meetingId },
+        select: DOC_SELECT,
+        orderBy: { createdAt: 'desc' },
+      }),
+      // The most recent circulation, not the first: a corrigendum re-merges
+      // everything on file, so its circulation is the line that matters.
+      this.prisma.mom.findFirst({
+        where: { meetingId, circulatedAt: { not: null } },
+        orderBy: { circulatedAt: 'desc' },
+        select: { circulatedAt: true, version: true },
+      }),
+    ]);
+
+    const since = circulated?.circulatedAt ?? null;
+    const withNames = await this.withUploaders(rows);
+    return withNames.map((d) => ({
+      ...d,
+      afterCirculation: since !== null && d.createdAt > since,
+      circulatedVersion: since !== null ? circulated!.version : null,
+    }));
   }
 
   /**

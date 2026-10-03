@@ -55,6 +55,9 @@ interface MeetingDoc {
   createdAt: string;
   file: { id: string; fileName: string; mimeType: string; sizeBytes: number | null };
   uploadedBy: { id: string; name: string; initials: string };
+  /** Filed after the signed MoM went out, so it is not in the circulated copy. */
+  afterCirculation: boolean;
+  circulatedVersion: number | null;
 }
 
 export default function MeetingPage() {
@@ -869,9 +872,19 @@ function DocumentsTab({
   onUploaded: () => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const late = docs.filter((d) => d.afterCirculation);
 
   return (
     <div className="grid gap-4">
+      {late.length > 0 && (
+        <Notice tone="amber">
+          {late.length === 1 ? 'One document was' : `${late.length} documents were`} filed after
+          the signed MoM was circulated, so {late.length === 1 ? 'it is' : 'they are'} on record
+          here but not inside the copy that went out. A corrigendum re-merges every annexure on
+          file; until then {late.length === 1 ? 'it has' : 'they have'} to travel separately.
+        </Notice>
+      )}
+
       {!canUpload && (
         <Notice>
           <WhoCan
@@ -924,6 +937,11 @@ function DocumentsTab({
                   <tr key={d.id}>
                     <td>
                       <b className="text-navy">{d.name}</b>
+                      {d.afterCirculation && (
+                        <span className="ml-1.5 rounded-full bg-[#FDF4E7] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8A5A1B]">
+                          Not in v{d.circulatedVersion}
+                        </span>
+                      )}
                       {d.remarks && (
                         <small className="mt-0.5 block text-[11.5px] text-muted">
                           {d.remarks}

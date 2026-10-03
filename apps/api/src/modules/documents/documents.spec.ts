@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { documentInput, reserveFileDto, ulbDto, createProjectDto } from '@mom/shared';
 
 /**
@@ -118,5 +120,58 @@ describe('project money', () => {
 
   it('normalises the project code, because it ends up in every meeting reference', () => {
     expect(createProjectDto.parse({ ...base, code: 'p9' }).code).toBe('P9');
+  });
+});
+
+
+/**
+ * Annexures may be filed at any point in a meeting's life, which the client
+ * asked for by name: the revised estimate and the countersigned letter arrive
+ * when they arrive, not while the minutes are open. The cost of allowing that
+ * is that the system must not imply every paper on file is inside the signed
+ * PDF, because the merge runs once, at circulation.
+ *
+ * These read the sources as text. There is no database here, and the thing
+ * worth pinning is an agreement between three files that would otherwise
+ * drift apart silently - the symptom being a document numbered A-01 on screen
+ * and A-04 in the PDF somebody is holding.
+ */
+describe('annexures filed late', () => {
+  const api = process.cwd();
+  const root = join(api, '..', '..');
+  const documents = readFileSync(
+    join(api, 'src', 'modules', 'documents', 'documents.service.ts'),
+    'utf8',
+  );
+  const mom = readFileSync(join(api, 'src', 'modules', 'mom', 'mom.service.ts'), 'utf8');
+  const minutes = readFileSync(
+    join(root, 'apps', 'web', 'src', 'app', 'meetings', '[id]', 'minutes', 'page.tsx'),
+    'utf8',
+  );
+
+  it('are still accepted: nothing in addToMeeting asks the stage', () => {
+    const add = documents.slice(
+      documents.indexOf('async addToMeeting('),
+      documents.indexOf('async remove(') > -1
+        ? documents.indexOf('async remove(')
+        : documents.length,
+    );
+    expect(add).not.toMatch(/stage/);
+  });
+
+  it('are measured against the most recent circulation, so a corrigendum resets it', () => {
+    const list = documents.slice(documents.indexOf('async listForMeeting('));
+    expect(list).toMatch(/circulatedAt: \{ not: null \}/);
+    expect(list).toMatch(/orderBy: \{ circulatedAt: 'desc' \}/);
+    expect(list).toMatch(/afterCirculation: since !== null && d\.createdAt > since/);
+  });
+
+  it('are numbered in the order the merge appends them, not the order they are listed', () => {
+    // The merge is oldest first; the list is newest first. The screen that
+    // prints "A-01" has to sort before it counts, or the two disagree.
+    const merge = mom.slice(mom.indexOf('const annexures = await tx.document.findMany'));
+    expect(merge.slice(0, 300)).toMatch(/orderBy: \{ createdAt: 'asc' \}/);
+    expect(minutes).toMatch(/const numbered = \[\.\.\.annexures\]\.sort\(/);
+    expect(minutes).toMatch(/\{numbered\.map\(\(d, n\) =>/);
   });
 });

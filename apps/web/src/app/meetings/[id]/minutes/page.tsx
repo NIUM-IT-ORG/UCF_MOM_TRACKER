@@ -24,6 +24,9 @@ interface Annexure {
   createdAt: string;
   file: { id: string; fileName: string; mimeType: string; sizeBytes: number | null };
   uploadedBy: { id: string; name: string; initials: string };
+  /** Filed after the signed MoM went out, so it is not in the copy people hold. */
+  afterCirculation: boolean;
+  circulatedVersion: number | null;
 }
 
 /**
@@ -204,7 +207,14 @@ export default function MinutesPage() {
    * was approved has to be what is circulated — otherwise a paper can be
    * slipped in after the reading and before the signature.
    */
-  const canAttach = caps.includes('manage_project_docs') && !locked;
+  const canAttach = caps.includes('manage_project_docs');
+  /*
+   * Numbered oldest first, because that is the order the merge appends them
+   * in when the MoM is circulated. The list arrives newest first, which was
+   * printing A-01 against the paper that comes last in the signed document.
+   */
+  const numbered = [...annexures].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const late = numbered.filter((d) => d.afterCirculation);
 
   return (
     <>
@@ -357,9 +367,18 @@ export default function MinutesPage() {
           <div className="px-[17px] py-4">
             <p className="m-0 mb-3 text-[12.5px] text-muted">
               Papers tabled at this meeting — estimates, drawings, presentations. They are
-              listed on the MoM as numbered annexures and are sent with it when it is
-              circulated.
+              listed on the MoM as numbered annexures and are merged into it when it is
+              circulated. One can be filed at any time, including after circulation.
             </p>
+
+            {late.length > 0 && (
+              <Notice tone="amber">
+                {late.length === 1 ? 'One annexure was' : `${late.length} annexures were`} filed
+                after the signed MoM went out, so {late.length === 1 ? 'it is' : 'they are'} not in
+                the copy people are holding. Issue a corrigendum to re-merge the full set, or send
+                {late.length === 1 ? ' it' : ' them'} on separately.
+              </Notice>
+            )}
 
             {annexures.length === 0 ? (
               <Empty>Nothing attached to these minutes yet.</Empty>
@@ -376,13 +395,18 @@ export default function MinutesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {annexures.map((d, n) => (
+                    {numbered.map((d, n) => (
                       <tr key={d.id}>
                         <td className="whitespace-nowrap font-mono text-[11.5px] font-semibold text-navy">
                           A-{String(n + 1).padStart(2, '0')}
                         </td>
                         <td>
                           {d.name}
+                          {d.afterCirculation && (
+                            <span className="ml-1.5 rounded-full bg-[#FDF4E7] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8A5A1B]">
+                              Not in v{d.circulatedVersion}
+                            </span>
+                          )}
                           {d.remarks && (
                             <small className="block text-[11px] text-muted">{d.remarks}</small>
                           )}
@@ -425,8 +449,9 @@ export default function MinutesPage() {
             )}
             {caps.includes('manage_project_docs') && locked && (
               <p className="mb-0 mt-3 text-[11.5px] text-muted">
-                The MoM is with the approver, so the annexures are fixed too — what was approved
-                has to be what is circulated. They unlock if it is returned.
+                The MoM is with the approver. Anything attached now still goes into the document
+                when it is circulated — tell the approver, so they are not signing a set they have
+                not seen.
               </p>
             )}
           </div>
