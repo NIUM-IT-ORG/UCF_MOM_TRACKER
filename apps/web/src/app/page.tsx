@@ -167,16 +167,29 @@ export default function Dashboard() {
               }
               href="/register?type=ACTION"
             />
+            {/*
+              The denominator is the population this figure is drawn from, not
+              the bigger one next to it. "Past their date" counts actions still
+              being worked on - In Progress and Delayed. An action reported
+              complete and waiting on a confirmer is late on the confirmer, not
+              on the officer, which is the rule the register ages by too.
+              Printing "9 of 12" put two items in the denominator that could
+              never appear in the numerator.
+
+              The link goes to the overdue filter. It used to go to
+              status=DELAYED, a different and much smaller set: the card said
+              nine, the list it opened showed two.
+            */}
             <Hero
               value={data.actions.overdue}
               label="Actions past their date"
               note={
                 data.actions.overdue > 0
-                  ? `of ${data.actions.pending} still open`
+                  ? `of ${data.actions.inProgress + data.actions.delayed} still being worked on`
                   : 'nothing is overdue'
               }
               tone={data.actions.overdue > 0 ? 'red' : undefined}
-              href="/register?type=ACTION&status=DELAYED"
+              href="/register?type=ACTION&overdue=true"
             />
             <Hero
               value={data.clarifications.pending}

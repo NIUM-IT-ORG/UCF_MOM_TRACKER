@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { designationLabel } from './display.js';
+import { designationLabel, wholePercentages } from './display.js';
 import { MOM_STATE_LABEL, momStateLabel } from './enums.js';
 
 /**
@@ -77,5 +77,53 @@ describe('what a circulated MoM is called', () => {
       // a draft, and the word for it does not change.
       expect(momStateLabel(state, true)).toBe(MOM_STATE_LABEL[state]);
     }
+  });
+});
+
+
+/**
+ * The dashboard showed "50% · 13% · 13% · 25%" against sixteen actions. Each
+ * figure was correctly rounded and the four of them came to 101, which on a
+ * page a Mission Director reads is not a rounding artefact, it is a reason to
+ * doubt the other numbers too.
+ */
+describe('percentages printed beside a donut', () => {
+  const pct = (counts: Record<string, number>) => {
+    const slices = Object.entries(counts).map(([key, value]) => ({ key, value }));
+    const total = slices.reduce((sum, s) => sum + s.value, 0);
+    return wholePercentages(slices, total);
+  };
+  const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+
+  it('adds up to 100 on the breakdown that exposed this', () => {
+    const m = pct({ IN_PROGRESS: 8, DELAYED: 2, UNDER_REVIEW: 2, COMPLETED: 4 });
+    expect(sum(m)).toBe(100);
+    expect(m.get('IN_PROGRESS')).toBe(50);
+    expect(m.get('COMPLETED')).toBe(25);
+  });
+
+  it('adds up to 100 on thirds, which no per-slice rounding can', () => {
+    const m = pct({ a: 1, b: 1, c: 1 });
+    expect(sum(m)).toBe(100);
+    expect([...m.values()].sort()).toEqual([33, 33, 34]);
+  });
+
+  it('never gives a point to a slice with nothing in it', () => {
+    const m = pct({ a: 1, b: 1, c: 1, empty: 0 });
+    expect(m.get('empty')).toBe(0);
+    expect(sum(m)).toBe(100);
+  });
+
+  it('gives a single slice the whole hundred', () => {
+    expect(pct({ only: 7 }).get('only')).toBe(100);
+  });
+
+  it('returns nothing rather than dividing by zero', () => {
+    expect(pct({ a: 0, b: 0 }).size).toBe(0);
+  });
+
+  it('stays exact when the shares are already whole', () => {
+    const m = pct({ a: 1, b: 1, c: 2 });
+    expect([...m.values()]).toEqual([25, 25, 50]);
   });
 });

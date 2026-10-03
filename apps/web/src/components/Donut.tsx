@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { wholePercentages } from '@mom/shared';
 import Link from 'next/link';
 
 /**
@@ -58,7 +59,7 @@ export function Donut({
   if (total === 0) return <p className="m-0 text-[12.5px] text-muted">{empty}</p>;
 
   const drawn = slices.filter((s) => s.value > 0);
-  const share = (v: number) => (v / total) * 100;
+  const percent = wholePercentages(slices, total);
 
   let offset = 0;
   const arcs = drawn.map((s) => {
@@ -151,7 +152,7 @@ export function Donut({
               <span className="text-[12.5px] text-ink">{s.label}</span>
               <b className="text-right text-[13px] tabular-nums text-navy">{s.value}</b>
               <span className="text-right text-[11.5px] tabular-nums text-muted">
-                {s.value === 0 ? '—' : `${Math.round(share(s.value))}%`}
+                {s.value === 0 ? '—' : `${percent.get(s.key) ?? 0}%`}
               </span>
             </Link>
           </li>

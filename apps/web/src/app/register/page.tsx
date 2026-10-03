@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   ACTION_STATUS_LABEL,
   CLARIFICATION_STATUS_LABEL,
@@ -47,17 +48,44 @@ interface ProjectOption {
   name: string;
 }
 
+/**
+ * The register is linked to, not only navigated to.
+ *
+ * Every figure on the dashboard is a link into this screen - "9 actions past
+ * their date", a donut slice, "Delayed →" - and none of them worked, because
+ * this page built its filters from empty state and never read the query
+ * string. Clicking a card that said 9 produced the whole register, so the
+ * dashboard and the list it points at disagreed on every number.
+ *
+ * `useSearchParams` needs a Suspense boundary, which is what the wrapper is
+ * for.
+ */
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <Register />
+    </Suspense>
+  );
+}
+
+function Register() {
   const { user } = useSession();
+  const params = useSearchParams();
   const [items, setItems] = useState<ItemRow[] | null>(null);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
 
-  const [type, setType] = useState('');
-  const [status, setStatus] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [q, setQ] = useState('');
+  /*
+   * Opened from the URL, then owned by this screen.
+   *
+   * Lazy initialisers, so what arrives in the link seeds the filters once and
+   * the officer's own changes are never overwritten by a later render.
+   */
+  const [type, setType] = useState(() => params.get('type') ?? '');
+  const [status, setStatus] = useState(() => params.get('status') ?? '');
+  const [projectId, setProjectId] = useState(() => params.get('projectId') ?? '');
+  const [q, setQ] = useState(() => params.get('q') ?? '');
   /*
    * Who is responsible, as a filter.
    *
@@ -67,11 +95,11 @@ export default function RegisterPage() {
    * coordinator arrives at this register with, and it could only be answered
    * about oneself.
    */
-  const [ownerId, setOwnerId] = useState('');
+  const [ownerId, setOwnerId] = useState(() => params.get('ownerId') ?? '');
   const [people, setPeople] = useState<{ id: string; name: string; designation: { name: string } }[]>([]);
-  const [raisedById, setRaisedById] = useState('');
-  const [mine, setMine] = useState(false);
-  const [overdue, setOverdue] = useState(false);
+  const [raisedById, setRaisedById] = useState(() => params.get('raisedById') ?? '');
+  const [mine, setMine] = useState(() => params.get('mine') === 'true');
+  const [overdue, setOverdue] = useState(() => params.get('overdue') === 'true');
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -87,6 +115,29 @@ export default function RegisterPage() {
     if (raisedById) p.set('raisedById', raisedById);
     return p.toString();
   }, [type, status, projectId, q, overdue, mine, ownerId, raisedById, user]);
+
+  /*
+   * Keep the address bar on the filters, so a filtered register can be sent
+   * to somebody and the back button returns to what you were looking at.
+   *
+   * Written from the raw state rather than from `query`: "Only mine" is a
+   * shortcut, and resolving it into the signed-in officer's id would put that
+   * id in a link they then paste to a colleague, where it would silently
+   * filter to the wrong person.
+   */
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (type) p.set('type', type);
+    if (status) p.set('status', status);
+    if (projectId) p.set('projectId', projectId);
+    if (q.trim()) p.set('q', q.trim());
+    if (overdue) p.set('overdue', 'true');
+    if (ownerId) p.set('ownerId', ownerId);
+    else if (mine) p.set('mine', 'true');
+    if (raisedById) p.set('raisedById', raisedById);
+    const search = p.toString();
+    window.history.replaceState(null, '', search ? `/register?${search}` : '/register');
+  }, [type, status, projectId, q, overdue, mine, ownerId, raisedById]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
