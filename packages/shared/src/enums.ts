@@ -99,6 +99,20 @@ export const MOM_STATE_LABEL: Record<MomState, string> = {
   SIGNED: 'Signed & circulated',
 };
 
+/**
+ * What a circulated MoM is called, which depends on how it was signed.
+ *
+ * Signing in the system and filing a signed paper are both signing, and the
+ * label has to say which happened: the office that scans a wet signature
+ * needs its own word for it, or every closed meeting reads as though the
+ * document were generated. `MOM_STATE_LABEL` stays the plain map because a
+ * legend or a filter has no MoM in hand to ask.
+ */
+export function momStateLabel(state: MomState, uploaded = false): string {
+  if (state === 'SIGNED' && uploaded) return 'Uploaded & circulated';
+  return MOM_STATE_LABEL[state] ?? state;
+}
+
 /** The diagonal stamp on the rendered document. Empty once signed. */
 export const MOM_WATERMARK: Record<MomState, string> = {
   NOT_GENERATED: 'NOT GENERATED',

@@ -41,6 +41,43 @@ export interface MergeResult {
   appended: { ref: string; pages: number; embedded: boolean; reason?: string }[];
 }
 
+/**
+ * What may be filed as the signed MoM itself.
+ *
+ * Narrower than an annexure deliberately. An annexure that cannot be embedded
+ * gets a page saying so and the bundle is still a bundle; the minutes cannot
+ * be handled that way, because they are the document. A .docx as the signed
+ * record would produce a PDF whose first page reads "this could not be
+ * included" — so it is refused at the door instead, where the officer can do
+ * something about it.
+ */
+export const SIGNED_UPLOAD_TYPES = ['application/pdf', 'image/png', 'image/jpeg'] as const;
+
+/**
+ * An uploaded signed document, as PDF bytes ready to have annexures appended.
+ *
+ * A PDF is passed through untouched — it must be, because it carries the
+ * signature and anything we re-render is no longer the thing that was signed.
+ * A photograph or a scan saved as an image is placed on an A4 page at the
+ * same scale rule the annexures use.
+ */
+export async function pdfFromUpload(bytes: Uint8Array, mimeType: string): Promise<Uint8Array> {
+  if (mimeType === 'application/pdf') return bytes;
+  if (!isImage(mimeType)) {
+    throw new Error(`${mimeType} cannot be used as the signed document`);
+  }
+  const out = await PDFDocument.create();
+  await appendImage(out, {
+    ref: '',
+    name: '',
+    fileName: '',
+    typeLabel: '',
+    mimeType,
+    bytes,
+  });
+  return out.save();
+}
+
 export async function mergeAnnexures(
   minutesPdf: Uint8Array,
   annexures: Annexure[],

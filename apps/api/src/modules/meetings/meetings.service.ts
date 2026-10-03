@@ -41,7 +41,17 @@ const LIST_SELECT = {
   // Newest version only: a meeting with a corrigendum has more than one row,
   // and the list shows the document currently in force.
   moms: {
-    select: { id: true, state: true, version: true, circulatedAt: true, correctsMomId: true },
+    // `signedFileId` says which of the two signing routes was taken, and so
+    // which document people were handed. Every screen that names the
+    // outcome needs it, including the list.
+    select: {
+      id: true,
+      state: true,
+      version: true,
+      circulatedAt: true,
+      correctsMomId: true,
+      signedFileId: true,
+    },
     orderBy: { version: 'desc' },
     take: 1,
   },

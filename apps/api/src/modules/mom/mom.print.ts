@@ -6,7 +6,7 @@ import type { AuthUser } from '../auth/auth-user.js';
 import { StorageService } from '../files/storage.js';
 import { MomDocumentService } from './mom.document.js';
 import { htmlToPdf } from '../../common/print/print.js';
-import { mergeAnnexures, type Annexure } from './mom.pdf.js';
+import { mergeAnnexures, pdfFromUpload, type Annexure } from './mom.pdf.js';
 import { DOCUMENT_TYPE_LABEL } from '@mom/shared';
 
 /**
@@ -26,10 +26,21 @@ export class MomPrintService {
     private readonly storage: StorageService,
   ) {}
 
+  /**
+   * The bundle: the minutes, then the papers tabled at the meeting.
+   *
+   * Which document counts as "the minutes" depends on how it was signed. An
+   * officer who uploads a wet-signed copy has signed that paper, and it is
+   * what the office holds; re-rendering the template would hand people a
+   * document carrying no signature at all. So an uploaded MoM is the base,
+   * byte for byte, and the generated one stays available separately as the
+   * system copy.
+   */
   async pdf(user: AuthUser, meetingId: string): Promise<{ bytes: Uint8Array; fileName: string }> {
     const { html, code } = await this.document.html(user, meetingId);
 
-    const minutes = await htmlToPdf(html);
+    const uploaded = await this.signedUpload(meetingId);
+    const minutes = uploaded ?? (await htmlToPdf(html));
     const annexures = await this.collect(user, meetingId);
 
     const { pdf, appended } = await mergeAnnexures(minutes, annexures);
@@ -41,6 +52,43 @@ export class MomPrintService {
     );
 
     return { bytes: pdf, fileName: `${code.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf` };
+  }
+
+  /**
+   * The signed document somebody filed, as PDF bytes — or null if this MoM
+   * was signed in the system.
+   *
+   * The scope check is the caller's: `document.html` has already run and
+   * refused a meeting this officer cannot see. Missing bytes fall back to the
+   * generated document rather than failing the download, because a bundle
+   * that opens is worth more than an error, and the screen says which copy is
+   * which.
+   */
+  private async signedUpload(meetingId: string): Promise<Uint8Array | null> {
+    const mom = await this.prisma.mom.findFirst({
+      where: { meetingId, signedFileId: { not: null } },
+      orderBy: { version: 'desc' },
+      select: { signedFileId: true, version: true },
+    });
+    if (!mom?.signedFileId) return null;
+
+    const file = await this.prisma.storedFile.findUnique({
+      where: { id: mom.signedFileId },
+      select: { objectKey: true, mimeType: true, uploadedAt: true },
+    });
+    if (!file?.uploadedAt) return null;
+
+    try {
+      const bytes = await this.storage.get(file.objectKey);
+      return await pdfFromUpload(new Uint8Array(bytes), file.mimeType);
+    } catch (err) {
+      this.log.warn(
+        `v${mom.version}: the signed upload could not be read (${
+          err instanceof Error ? err.message : String(err)
+        }) — printing the system copy instead`,
+      );
+      return null;
+    }
   }
 
   /** The papers tabled at this meeting, with their bytes, in the order they were added. */

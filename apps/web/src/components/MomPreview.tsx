@@ -14,8 +14,22 @@ import { useRef, useState } from 'react';
  * per the build contract — served through Next's rewrite, so it is
  * same-origin and carries the session cookie like any other request.
  */
-export function MomPreview({ meetingId, label }: { meetingId: string; label: string }) {
-  const src = `/api/v1/meetings/${meetingId}/mom.html`;
+export function MomPreview({
+  meetingId,
+  label,
+  signedFileId = null,
+}: {
+  meetingId: string;
+  label: string;
+  /**
+   * The signed document, when one was filed. It is then the MoM, so it is what
+   * this shows: a preview of the generated template beside a button offering
+   * "the document" would be showing everybody the copy nobody signed.
+   */
+  signedFileId?: string | null;
+}) {
+  const system = `/api/v1/meetings/${meetingId}/mom.html`;
+  const src = signedFileId ? `/api/v1/files/${signedFileId}/content` : system;
   /*
    * The PDF is not the same thing as printing this preview. The server prints
    * the identical template and then appends the papers tabled at the meeting —
@@ -28,6 +42,11 @@ export function MomPreview({ meetingId, label }: { meetingId: string; label: str
   const [open, setOpen] = useState(true);
   const [tall, setTall] = useState(false);
 
+  /*
+   * Only for the generated document. A PDF renders in the frame through the
+   * browser's own viewer, which does not take `print()` from the parent and
+   * offers its own button anyway.
+   */
   function print() {
     // Printing the frame rather than the page: the document carries its own
     // A4 print styles and watermark, and the surrounding application should
@@ -55,10 +74,17 @@ export function MomPreview({ meetingId, label }: { meetingId: string; label: str
             <button type="button" className="btn-ghost" onClick={() => setTall((v) => !v)}>
               {tall ? 'Shorter' : 'Taller'}
             </button>
-            <button type="button" className="btn-ghost" onClick={print}>
-              Print this page
-            </button>
+            {!signedFileId && (
+              <button type="button" className="btn-ghost" onClick={print}>
+                Print this page
+              </button>
+            )}
           </>
+        )}
+        {signedFileId && (
+          <a className="btn-ghost" href={system} target="_blank" rel="noreferrer">
+            System copy
+          </a>
         )}
         <a className="btn-ghost" href={src} target="_blank" rel="noreferrer">
           Open full page

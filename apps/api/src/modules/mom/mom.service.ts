@@ -10,6 +10,7 @@ import { MeetingsService } from '../meetings/meetings.service.js';
 import { AttendanceService } from '../meetings/attendance.service.js';
 import { MinutesService } from '../minutes/minutes.service.js';
 import { FilesService } from '../files/files.service.js';
+import { SIGNED_UPLOAD_TYPES } from './mom.pdf.js';
 import {
   advanceMom,
   assertMaySign,
@@ -478,9 +479,15 @@ export class MomService {
    * there is no window in which the register says "approved" and the file says
    * nothing.
    *
-   * A wet-signed scan may still be filed afterwards for the physical record —
-   * `fileId` is optional and, when given, is stored alongside. It is not what
-   * makes the MoM signed.
+   * There are two ways to sign, and they are both signing.
+   *
+   * Without `fileId` the signature is the act in the system, as above, and the
+   * generated document is the MoM. With `fileId` the officer has signed the
+   * paper and filed it: that upload *is* the signature, it is what circulates
+   * and what everyone is handed, and the generated document stays available
+   * as the system copy. Either way the state is SIGNED and everything below
+   * happens identically — which is the point, because an office that signs on
+   * paper is not doing something lesser.
    *
    * On SIGNED, in one transaction:
    *   1. every Item for that meeting gets activatedAt = now();
@@ -507,13 +514,19 @@ export class MomService {
       canSign: user.caps.includes('sign_mom'),
     });
 
-    // Optional: the wet-signed scan, for the physical file.
+    /*
+     * When a document is filed, it becomes the MoM, so what may be filed is
+     * narrower than what may be annexed: it has to be something that can
+     * carry the signature and be printed. A .docx cannot, and refusing it
+     * here is kinder than producing a bundle whose first page apologises.
+     */
     if (dto.fileId) {
       const file = await this.files.requireUploaded(dto.fileId);
-      if (file.mimeType !== 'application/pdf') {
+      if (!(SIGNED_UPLOAD_TYPES as readonly string[]).includes(file.mimeType)) {
         throw new AppError(
           'VALIDATION_FAILED',
-          'The signed copy has to be a PDF — a scan of the signed document.',
+          'The signed MoM has to be a PDF, or a photograph or scan of the signed pages. This one is a ' +
+            `${file.mimeType} file.`,
           { field: 'fileId' },
         );
       }
@@ -675,7 +688,9 @@ export class MomService {
           event: 'SIGNED',
           version: mom.version,
           actorId: user.id,
-          remark: `Signed in the system by ${user.name}, ${user.designationName}.`,
+          remark: dto.fileId
+            ? `Signed on paper by ${user.name}, ${user.designationName}, and the signed document filed. That document is the MoM.`
+            : `Signed in the system by ${user.name}, ${user.designationName}.`,
         },
       });
       await tx.auditEntry.create({

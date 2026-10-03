@@ -1,6 +1,12 @@
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import { mergeAnnexures, clip, type Annexure } from './mom.pdf.js';
+import {
+  mergeAnnexures,
+  pdfFromUpload,
+  clip,
+  SIGNED_UPLOAD_TYPES,
+  type Annexure,
+} from './mom.pdf.js';
 import { browserCandidates, findBrowser, noBrowserMessage } from '../../common/print/browser.js';
 
 /**
@@ -188,5 +194,43 @@ describe('finding a browser to print with', () => {
     expect(noBrowserMessage('win32')).toMatch(/Edge/);
     expect(noBrowserMessage('linux')).toMatch(/apt-get install/);
     expect(noBrowserMessage('linux')).toMatch(/MOM_BROWSER_PATH/);
+  });
+});
+
+
+/**
+ * An uploaded signed MoM is the document, so the bundle has to be built on it
+ * rather than on the template. The one rule that must not bend: a signed PDF
+ * is passed through untouched. Re-rendering it — flattening, re-saving,
+ * anything — produces a file that is no longer the one the officer signed,
+ * and the whole reason to upload it was that the signature is on it.
+ */
+describe('the signed document somebody filed', () => {
+  it('passes a PDF through exactly as it was uploaded', async () => {
+    const signed = await blank(3);
+    const out = await pdfFromUpload(signed, 'application/pdf');
+    expect(out).toBe(signed);
+  });
+
+  it('puts a photographed or scanned signature on a page of its own', async () => {
+    const out = await pdfFromUpload(PNG, 'image/png');
+    expect(await pageCount(out)).toBe(1);
+  });
+
+  it('refuses what cannot carry a signature into a PDF', async () => {
+    await expect(
+      pdfFromUpload(PNG, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+    ).rejects.toThrow(/cannot be used as the signed document/);
+  });
+
+  it('accepts only the three types the signing route offers', () => {
+    expect([...SIGNED_UPLOAD_TYPES]).toEqual(['application/pdf', 'image/png', 'image/jpeg']);
+  });
+
+  it('carries the annexures behind it, as the generated document does', async () => {
+    const base = await pdfFromUpload(await blank(2), 'application/pdf');
+    const { pdf } = await mergeAnnexures(base, [annexure({ bytes: await blank(1) })]);
+    // 2 signed pages + 1 separator + 1 annexure page.
+    expect(await pageCount(pdf)).toBe(4);
   });
 });

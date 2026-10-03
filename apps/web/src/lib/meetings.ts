@@ -10,6 +10,7 @@ import type {
   Priority,
   RsvpResponse,
 } from '@mom/shared';
+import { momStateLabel } from '@mom/shared';
 
 /**
  * The shapes the meeting screens read.
@@ -49,7 +50,14 @@ export interface MeetingRow {
   chair: Person | null;
   createdBy: { id: string; name: string; initials: string };
   projects: { project: { id: string; code: string; name: string } }[];
-  moms: { id: string; state: MomState; version: number; circulatedAt: string | null }[];
+  moms: {
+    id: string;
+    state: MomState;
+    version: number;
+    circulatedAt: string | null;
+    /** Set when the signed document was filed, which makes it the MoM. */
+    signedFileId: string | null;
+  }[];
   _count: { agenda: number; invitees: number; items: number; documents: number };
 }
 
@@ -186,10 +194,15 @@ export function nextStep(m: MeetingRow): string {
       if (mom.state === 'DRAFT') return 'Submit the MoM for approval';
       if (mom.state === 'SUBMITTED') return 'Waiting for approval';
       if (mom.state === 'RETURNED') return 'Returned — act on the remark';
-      if (mom.state === 'APPROVED') return 'Upload the signed copy and circulate';
+      if (mom.state === 'APPROVED') return 'Sign it, or file the signed copy — either circulates it';
       return 'Circulate the signed MoM';
     case 'CLOSED':
-      return 'Closed';
+      // "Closed" says the meeting is over; it does not say what came out of
+      // it, which is the only thing anybody is looking for on a closed
+      // meeting. The two signing routes get their own words.
+      return mom?.state === 'SIGNED'
+        ? momStateLabel('SIGNED', Boolean(mom.signedFileId))
+        : 'Closed';
     case 'CANCELLED':
       return 'Cancelled';
     default:

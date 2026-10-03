@@ -7,6 +7,7 @@ import {
   ATTENDANCE_LABEL,
   DOCUMENT_TYPE_LABEL,
   MEETING_CATEGORY_LABEL,
+  momStateLabel,
   RSVP_LABEL,
   type AttendanceMark,
   type DocumentType,
@@ -149,7 +150,20 @@ export default function MeetingPage() {
                 Instant
               </span>
             )}
-            <StageChip stage={meeting.stage} />
+            <StageChip
+              stage={meeting.stage}
+              /*
+               * A closed meeting reads "Closed", which is true and useless:
+               * the question anyone has in front of a finished meeting is
+               * whether the MoM went out and in what form. When it has, the
+               * chip answers that instead.
+               */
+              label={
+                meeting.stage === 'CLOSED' && mom?.state === 'SIGNED'
+                  ? momStateLabel('SIGNED', Boolean(mom.signedFileId))
+                  : undefined
+              }
+            />
             {caps.includes('share_object') && (
               <button type="button" className="btn-ghost" onClick={() => setSharing(true)}>
                 Share
@@ -1031,7 +1045,7 @@ function MomTab({
       <Card title="Minutes of meeting" tag={`Version ${mom.version}`}>
         <div className="px-[17px] py-4">
           <div className="mb-3 flex flex-wrap items-center gap-2.5">
-            <MomChip state={mom.state} />
+            <MomChip state={mom.state} uploaded={Boolean(mom.signedFileId)} />
             {mom.circulatedAt && (
               <span className="text-[12px] text-muted">
                 Circulated {formatDate(mom.circulatedAt)}
@@ -1052,9 +1066,15 @@ function MomTab({
           )}
 
           <div className="flex flex-wrap gap-2.5">
+            {/* The signed upload is the MoM when there is one, so it is what
+                this opens. The generated copy is still reachable beside it. */}
             <a
               className="btn-primary"
-              href={`/api/v1/meetings/${meeting.id}/mom.html`}
+              href={
+                mom.signedFileId
+                  ? `/api/v1/files/${mom.signedFileId}/content`
+                  : `/api/v1/meetings/${meeting.id}/mom.html`
+              }
               target="_blank"
               rel="noreferrer"
             >
@@ -1064,8 +1084,13 @@ function MomTab({
               Approval console
             </Link>
             {mom.signedFileId && (
-              <a className="btn-ghost" href={`/api/v1/files/${mom.signedFileId}/content`}>
-                Signed scan
+              <a
+                className="btn-ghost"
+                href={`/api/v1/meetings/${meeting.id}/mom.html`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                System copy
               </a>
             )}
             {mom.state === 'SIGNED' && caps.includes('record_minutes') && (
@@ -1093,7 +1118,19 @@ function MomTab({
               annexure on file — this one stays exactly as people received it.
             </p>
           )}
-          <MomPreview meetingId={meeting.id} label={`The document · version ${mom.version}`} />
+          <MomPreview
+            meetingId={meeting.id}
+            label={`The document · version ${mom.version}`}
+            signedFileId={mom.signedFileId}
+          />
+
+          {mom.signedFileId && (
+            <p className="mb-0 mt-3 text-[11.5px] text-muted">
+              This MoM was signed on paper and the signed document filed, so that document is
+              what circulated and what <b>PDF with annexures</b> is built from. <b>System copy</b>
+              {' '}opens the version this system generated — the one the approver approved.
+            </p>
+          )}
 
           <p className="mb-0 mt-3 text-[11.5px] text-muted">
             The document opens print-ready at A4 with its watermark. Use your browser’s “Save as

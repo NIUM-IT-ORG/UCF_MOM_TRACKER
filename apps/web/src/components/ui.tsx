@@ -6,7 +6,7 @@ import {
   CLARIFICATION_STATUS_COLOR,
   CLARIFICATION_STATUS_LABEL,
   MEETING_STAGE_LABEL,
-  MOM_STATE_LABEL,
+  momStateLabel,
   PROJECT_STATUS_LABEL,
   type ActionStatus,
   type ClarificationStatus,
@@ -219,7 +219,7 @@ const STAGE_STYLE: Record<string, string> = {
   CANCELLED: 'bg-[#EEF2F7] text-[#8A94A3] line-through',
 };
 
-export function StageChip({ stage }: { stage: MeetingStage }) {
+export function StageChip({ stage, label }: { stage: MeetingStage; label?: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${
@@ -227,7 +227,7 @@ export function StageChip({ stage }: { stage: MeetingStage }) {
       }`}
     >
       <i className="h-[7px] w-[7px] rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />
-      {MEETING_STAGE_LABEL[stage] ?? stage}
+      {label ?? MEETING_STAGE_LABEL[stage] ?? stage}
     </span>
   );
 }
@@ -241,7 +241,13 @@ const MOM_STYLE: Record<string, string> = {
   SIGNED: 'bg-[#E6F4EC] text-[#1B8A57]',
 };
 
-export function MomChip({ state }: { state: MomState }) {
+/**
+ * `uploaded` is not decoration. A circulated MoM is either the document this
+ * system generated or the signed paper somebody filed, and which one it is
+ * decides what every reader is holding - so the chip says it rather than
+ * calling both "Signed".
+ */
+export function MomChip({ state, uploaded = false }: { state: MomState; uploaded?: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold ${
@@ -249,7 +255,7 @@ export function MomChip({ state }: { state: MomState }) {
       }`}
     >
       <i className="h-[7px] w-[7px] rounded-full" style={{ background: 'currentColor' }} aria-hidden="true" />
-      {MOM_STATE_LABEL[state] ?? state}
+      {momStateLabel(state, uploaded)}
     </span>
   );
 }

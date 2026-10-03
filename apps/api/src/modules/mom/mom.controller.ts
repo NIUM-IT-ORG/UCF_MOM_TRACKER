@@ -26,9 +26,12 @@ const momApproveDto = z
   .strict();
 
 /**
- * Signing is an act in the system, so nothing is required. `fileId` is for a
- * wet-signed scan filed afterwards for the physical record; it is not what
- * makes the MoM signed.
+ * Signing takes one of two routes, and `fileId` is what distinguishes them.
+ *
+ * Without it, the signature is the act in the system and the generated
+ * document is the MoM. With it, the officer has signed on paper and filed the
+ * result: that upload is the signature and the document everyone is handed.
+ * Nothing else about the step differs.
  *
  * Declared here rather than in `@mom/shared` deliberately: shared is ESM and
  * the API compiles to CommonJS, so a DTO that lives there cannot be changed

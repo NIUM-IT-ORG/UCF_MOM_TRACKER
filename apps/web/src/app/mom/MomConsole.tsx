@@ -28,7 +28,9 @@ interface Signatory {
 export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void }) {
   const { user, caps } = useSession();
   const [history, setHistory] = useState<MomHistoryRow[]>([]);
-  const [asking, setAsking] = useState<'return' | 'reject' | 'approve' | 'sign' | null>(null);
+  const [asking, setAsking] = useState<
+    'return' | 'reject' | 'approve' | 'sign' | 'upload' | null
+  >(null);
   const [remark, setRemark] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [signatories, setSignatories] = useState<Signatory[]>([]);
@@ -84,12 +86,12 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
    * physical file — if one is chosen it is uploaded first and filed alongside,
    * but nothing waits on it.
    */
-  async function signAndCirculate() {
+  async function signAndCirculate(withFile: boolean) {
     setBusy('sign');
     setError(null);
     try {
       let fileId: string | undefined;
-      if (file) {
+      if (withFile && file) {
         const reserved = await api<{ fileId: string; uploadUrl: string }>('/files', {
           method: 'POST',
           body: JSON.stringify({
@@ -159,8 +161,13 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
             PDF with annexures
           </a>
           {mom.signedFileId && (
-            <a className="text-[12px]" href={`/api/v1/files/${mom.signedFileId}/content`}>
-              wet-signed scan
+            <a
+              className="text-[12px]"
+              href={`/api/v1/files/${mom.signedFileId}/content`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              the signed document
             </a>
           )}
         </div>
@@ -176,12 +183,15 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
         {mom.state === 'SIGNED' && (
           <Notice tone="green">
             <b>
-              Signed
+              {mom.signedFileId ? 'Signed on paper' : 'Signed'}
               {mom.signedBy
                 ? ` by ${mom.signedBy.name}, ${mom.signedBy.designation.name},`
                 : ''}{' '}
               and circulated {formatDate(mom.circulatedAt)}.
             </b>{' '}
+            {mom.signedFileId
+              ? 'The document that was filed is the MoM — it is what people were sent and what the annexures are stapled behind. '
+              : ''}
             Every action and clarification in this document is now live, and the officers named have
             been told. This MoM cannot be changed — a correction is issued as a corrigendum.
           </Notice>
@@ -239,10 +249,22 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
                 who="Approving it and choosing who signs is their step"
               />
             )}
+            {/*
+              Two ways to sign, offered side by side rather than one hidden
+              inside the other. An office that signs on paper is not doing a
+              variant of signing in the system, and burying its file picker in
+              an optional field at the bottom of the signing dialog said it
+              was.
+            */}
             {mom.state === 'APPROVED' && isMySignature && (
-              <button className="btn-primary" type="button" onClick={() => setAsking('sign')}>
-                Sign &amp; circulate
-              </button>
+              <>
+                <button className="btn-primary" type="button" onClick={() => setAsking('sign')}>
+                  Sign in the system &amp; circulate
+                </button>
+                <button className="btn-ghost" type="button" onClick={() => setAsking('upload')}>
+                  Upload the signed document
+                </button>
+              </>
             )}
             {mom.state === 'APPROVED' && !isMySignature && (
               <Notice tone="amber">
@@ -378,29 +400,85 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
             </Notice>
             <p className="m-0 rounded-[10px] border border-line bg-[#F9FBFD] px-3.5 py-3 text-[12.5px] text-ink">
               Signing records your name, your designation and this moment on the document, beside a
-              green tick. You are signing as{' '}
+              green tick — and the document this system generated is then the MoM. You are signing
+              as{' '}
+              <b className="text-navy">
+                {user?.name}, {user?.designation?.name}
+              </b>
+              .
+            </p>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void signAndCirculate(false)}
+              >
+                {busy === 'sign' ? 'Signing…' : 'Sign & circulate — this makes the items live'}
+              </button>
+              <button
+                className="btn-ghost"
+                type="button"
+                disabled={busy !== null}
+                onClick={() => setAsking('upload')}
+              >
+                I have signed it on paper instead
+              </button>
+              <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
+                Never mind
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/*
+          Filing the signed paper. Same endpoint, same step, same consequences
+          as signing in the system - the difference is only which document
+          everybody ends up holding, and here it is theirs.
+        */}
+        {asking === 'upload' && (
+          <div className="grid gap-3">
+            <Notice tone="amber">
+              <b>This is the last step, and it cannot be undone.</b> Circulating sets every action
+              and clarification in the document live, tells the officers named on them, and closes
+              the meeting. After this the MoM is immutable.
+            </Notice>
+            <p className="m-0 rounded-[10px] border border-line bg-[#F9FBFD] px-3.5 py-3 text-[12.5px] text-ink">
+              The document you upload <b>becomes the MoM</b>. It is what circulates, what the
+              annexures are stapled behind, and what anyone opening this meeting is shown. The
+              version this system generated stays available beside it as the system copy. Filing
+              it is recorded as your signature, as{' '}
               <b className="text-navy">
                 {user?.name}, {user?.designation?.name}
               </b>
               .
             </p>
             <Field
-              label="Signed scan"
-              hint="Optional. Only if a wet-signed copy is being kept in the physical file — the signature above is what circulates."
+              label="The signed document"
+              required
+              hint="A PDF, or a photograph or scan of the signed pages. Up to 25 MB."
             >
               <div className="rounded-xl border-[1.5px] border-dashed border-[#B9C6D6] bg-[#F9FBFD] p-5 text-center">
                 <input
                   ref={fileInput}
                   type="file"
-                  accept="application/pdf"
+                  accept="application/pdf,image/png,image/jpeg"
                   className="sr-only"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
-                <button type="button" className="btn-ghost" onClick={() => fileInput.current?.click()}>
-                  Choose a PDF
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  {file ? 'Choose a different file' : 'Choose the signed document'}
                 </button>
                 <div className="mt-2 text-[12.5px] text-muted">
-                  {file ? <b className="text-navy">{file.name}</b> : 'Not required. PDF, up to 25 MB.'}
+                  {file ? (
+                    <b className="text-navy">{file.name}</b>
+                  ) : (
+                    'Nothing chosen yet. PDF, PNG or JPEG.'
+                  )}
                 </div>
               </div>
             </Field>
@@ -408,12 +486,21 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
               <button
                 className="btn-primary"
                 type="button"
-                disabled={busy !== null}
-                onClick={() => void signAndCirculate()}
+                disabled={busy !== null || !file}
+                onClick={() => void signAndCirculate(true)}
               >
-                {busy === 'sign' ? 'Signing…' : 'Sign & circulate — this makes the items live'}
+                {busy === 'sign'
+                  ? 'Filing…'
+                  : 'File it & circulate — this makes the items live'}
               </button>
-              <button className="btn-ghost" type="button" onClick={() => setAsking(null)}>
+              <button
+                className="btn-ghost"
+                type="button"
+                onClick={() => {
+                  setFile(null);
+                  setAsking(null);
+                }}
+              >
                 Never mind
               </button>
             </div>
@@ -423,6 +510,7 @@ export function MomConsole({ mom, onDone }: { mom: MomRow; onDone: () => void })
         <MomPreview
           meetingId={mom.meeting.id}
           label={`The document · ${mom.meeting.code} v${mom.version}`}
+          signedFileId={mom.signedFileId}
         />
 
         {history.length > 0 && (

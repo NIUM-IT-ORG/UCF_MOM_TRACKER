@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { designationLabel } from './display.js';
+import { MOM_STATE_LABEL, momStateLabel } from './enums.js';
 
 /**
  * What goes in the Designation column.
@@ -44,5 +45,37 @@ describe('the designation a person is shown under', () => {
    */
   it('returns a label and never a code', () => {
     expect(designationLabel('Branch Manager, SBI', 'External invitee')).not.toMatch(/^EXT$/);
+  });
+});
+
+
+/**
+ * The two signing routes have to be told apart wherever a MoM is named.
+ *
+ * An office that signs on paper files the signed document, and that document
+ * is then the MoM - what circulated, what the annexures sit behind, what
+ * anybody opening the meeting is handed. Calling that "Signed & circulated",
+ * the same as a document this system generated, loses the only distinction a
+ * reader of a closed meeting actually needs.
+ */
+describe('what a circulated MoM is called', () => {
+  it('says the document was uploaded when one was filed', () => {
+    expect(momStateLabel('SIGNED', true)).toBe('Uploaded & circulated');
+  });
+
+  it('says signed when the signature was the act in the system', () => {
+    expect(momStateLabel('SIGNED', false)).toBe('Signed & circulated');
+  });
+
+  it('treats an unknown route as signed in the system, never as uploaded', () => {
+    expect(momStateLabel('SIGNED')).toBe('Signed & circulated');
+  });
+
+  it('leaves every other state exactly as the plain map has it', () => {
+    for (const state of ['NOT_GENERATED', 'DRAFT', 'SUBMITTED', 'RETURNED', 'APPROVED'] as const) {
+      // Including with uploaded = true: a draft with a file attached is still
+      // a draft, and the word for it does not change.
+      expect(momStateLabel(state, true)).toBe(MOM_STATE_LABEL[state]);
+    }
   });
 });
