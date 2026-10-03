@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
+  ACTION_STATUS_COLOR,
   ACTION_STATUS_LABEL,
+  ACTION_STATUS_OPEN_FILTER,
+  ACTION_STATUS_ORDER,
+  CLARIFICATION_STATUS_COLOR,
   CLARIFICATION_STATUS_LABEL,
+  CLARIFICATION_STATUS_ORDER,
+  CLARIFICATION_STATUS_UNCLOSED_FILTER,
   type ActionStatus,
   type ClarificationStatus,
   type MeetingStage,
@@ -89,30 +95,25 @@ interface Summary {
 }
 
 /*
- * The status colours, and the order the ring draws them in.
+ * The ring takes its colours and its order from the shared constants - the
+ * same ones every status chip in the product reads.
  *
- * Both were chosen by running the palette through a colour-blindness check
- * rather than by eye, and the *order* is part of the result: blue → red →
- * amber → green clears the separation test on every touching pair, and the
- * same four hues in their natural status order does not. Reordering these
- * arrays is a change to the chart, not to a list.
+ * It did not. This page carried its own four-colour palette, chosen for arc
+ * separation, and the result was that **amber meant Under Review on the chart
+ * and In Progress in the register**: one hue standing for two different
+ * things on two screens an officer reads side by side. In Progress was blue
+ * here and amber there. Whatever that bought in separation, it cost more in
+ * meaning.
  *
- * A fifth status means re-checking the palette, not appending a colour.
+ * Separation is carried by what does not depend on hue - the 2px gap between
+ * touching arcs, and a legend giving every slice a swatch, a name, a count
+ * and a share. Identity never rests on colour here; that rule lives in
+ * Donut.tsx and is what makes this safe.
  */
-const ACTION_TONES: Record<ActionStatus, string> = {
-  IN_PROGRESS: '#2a78d6',
-  DELAYED: '#d03b3b',
-  UNDER_REVIEW: '#eda100',
-  COMPLETED: '#008300',
-};
-const ACTION_RING: ActionStatus[] = ['IN_PROGRESS', 'DELAYED', 'UNDER_REVIEW', 'COMPLETED'];
-
-const CLARIFICATION_TONES: Record<ClarificationStatus, string> = {
-  OPEN: '#eda100',
-  RESPONDED: '#2a78d6',
-  CLOSED: '#008300',
-};
-const CLARIFICATION_RING: ClarificationStatus[] = ['OPEN', 'RESPONDED', 'CLOSED'];
+const ACTION_TONES = ACTION_STATUS_COLOR;
+const ACTION_RING = ACTION_STATUS_ORDER;
+const CLARIFICATION_TONES = CLARIFICATION_STATUS_COLOR;
+const CLARIFICATION_RING = CLARIFICATION_STATUS_ORDER;
 
 export default function Dashboard() {
   const { user } = useSession();
@@ -165,7 +166,7 @@ export default function Dashboard() {
                   ? `${data.actions.underReview} awaiting confirmation`
                   : `${data.actions.total} raised · ${data.actions.completed} completed`
               }
-              href="/register?type=ACTION&status=IN_PROGRESS,DELAYED,UNDER_REVIEW&live=true"
+              href={`/register?type=ACTION&status=${ACTION_STATUS_OPEN_FILTER}&live=true`}
             />
             {/*
               The denominator is the population this figure is drawn from, not
@@ -200,7 +201,7 @@ export default function Dashboard() {
                   : `${data.clarifications.total} raised · ${data.clarifications.closed} closed`
               }
               tone={data.clarifications.pending > 0 ? 'amber' : undefined}
-              href="/register?type=CLARIFICATION&status=OPEN,RESPONDED&live=true"
+              href={`/register?type=CLARIFICATION&status=${CLARIFICATION_STATUS_UNCLOSED_FILTER}&live=true`}
             />
           </div>
 

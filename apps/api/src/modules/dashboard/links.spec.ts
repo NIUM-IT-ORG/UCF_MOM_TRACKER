@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  ACTION_STATUS_ORDER,
+  ACTION_STATUS_OPEN_FILTER,
+  CLARIFICATION_STATUS_ORDER,
+  CLARIFICATION_STATUS_UNCLOSED_FILTER,
+} from '@mom/shared';
 
 /**
  * Every figure on the dashboard is a link into the register, and the list it
@@ -40,13 +46,15 @@ describe('the dashboard links', () => {
   });
 
   it('narrows to a status wherever the figure is not the whole ring', () => {
-    const open = links.find((l) => l.includes('IN_PROGRESS,DELAYED,UNDER_REVIEW'));
+    // Named by the shared constant rather than spelled out, so the card and
+    // the register's option cannot drift apart.
+    const open = links.find((l) => l.includes('ACTION_STATUS_OPEN_FILTER'));
     expect(open, 'the open-actions card must exclude COMPLETED').toBeTruthy();
-    expect(open).not.toMatch(/COMPLETED/);
+    expect(ACTION_STATUS_OPEN_FILTER).not.toMatch(/COMPLETED/);
 
-    const clar = links.find((l) => l.includes('OPEN,RESPONDED'));
+    const clar = links.find((l) => l.includes('CLARIFICATION_STATUS_UNCLOSED_FILTER'));
     expect(clar, 'the clarifications card must exclude CLOSED').toBeTruthy();
-    expect(clar).not.toMatch(/status=[^&]*CLOSED/);
+    expect(CLARIFICATION_STATUS_UNCLOSED_FILTER).not.toMatch(/CLOSED/);
   });
 
   it('sends "past their date" to the overdue filter, not to the Delayed status', () => {
@@ -80,5 +88,77 @@ describe('the register can answer what the dashboard asks', () => {
     expect(dto).not.toMatch(/(overdue|live): z\.coerce\.boolean\(\)/);
     expect(dto).toMatch(/overdue: flag/);
     expect(dto).toMatch(/live: flag/);
+  });
+});
+
+
+/**
+ * The chart and the register have to agree, not merely both be reasonable.
+ *
+ * They did not. The dashboard kept its own four-colour palette, picked for
+ * arc separation, so **amber was Under Review on the ring and In Progress in
+ * the register** - and the chip component's own comment claimed the donuts
+ * read the shared constants, asserting exactly the invariant that was broken.
+ * Both files also kept private copies of the status order, next to a shared
+ * one documented as "the order the donut and the register filters use".
+ */
+describe('the ring and the register speak one vocabulary', () => {
+  it('takes its colours from shared, so a hue means one thing everywhere', () => {
+    expect(dashboard).toMatch(/const ACTION_TONES = ACTION_STATUS_COLOR;/);
+    expect(dashboard).toMatch(/const CLARIFICATION_TONES = CLARIFICATION_STATUS_COLOR;/);
+  });
+
+  it('carries no status palette of its own', () => {
+    // The page has other colours - card tones, rules - and those are its
+    // own business. What must not come back is a map from status to hex.
+    expect(dashboard).not.toMatch(/Record<ActionStatus, string> = \{/);
+    expect(dashboard).not.toMatch(/Record<ClarificationStatus, string> = \{/);
+  });
+
+  it('takes the ring order from shared too, on both charts', () => {
+    expect(dashboard).toMatch(/const ACTION_RING = ACTION_STATUS_ORDER;/);
+    expect(dashboard).toMatch(/const CLARIFICATION_RING = CLARIFICATION_STATUS_ORDER;/);
+  });
+
+  it('does not let the register redeclare the lists beside it', () => {
+    expect(register).toMatch(/const ACTION_STATUSES = ACTION_STATUS_ORDER;/);
+    expect(register).toMatch(/const CLARIFICATION_STATUSES = CLARIFICATION_STATUS_ORDER;/);
+  });
+
+  it('only asks for status values the register can show as chosen', () => {
+    /*
+     * A link the status control cannot represent leaves it reading "Any
+     * status" over a filtered list. Single statuses come from the shared
+     * order, which the select renders; the two combined sets need an option
+     * of their own, and this is what says so.
+     */
+    const selectable = new Set<string>([
+      ...ACTION_STATUS_ORDER,
+      ...CLARIFICATION_STATUS_ORDER,
+      ACTION_STATUS_OPEN_FILTER,
+      CLARIFICATION_STATUS_UNCLOSED_FILTER,
+    ]);
+    const asked = links
+      .map((l) => /(?:^|&)status=([^&]+)/.exec(l)?.[1])
+      .filter((v): v is string => Boolean(v))
+      .map((v) => v.replace(/\$\{(\w+)\}/, (_, name: string) =>
+        name === 'ACTION_STATUS_OPEN_FILTER'
+          ? ACTION_STATUS_OPEN_FILTER
+          : name === 'CLARIFICATION_STATUS_UNCLOSED_FILTER'
+            ? CLARIFICATION_STATUS_UNCLOSED_FILTER
+            : v,
+      ));
+
+    expect(asked.length).toBeGreaterThanOrEqual(2);
+    for (const value of asked) {
+      // `${s}` is the donut's loop variable over the shared order.
+      if (value === '${s}') continue;
+      expect(selectable.has(value), value).toBe(true);
+    }
+  });
+
+  it('offers the combined sets as options, by the shared constant', () => {
+    expect(register).toMatch(/value=\{ACTION_STATUS_OPEN_FILTER\}/);
+    expect(register).toMatch(/value=\{CLARIFICATION_STATUS_UNCLOSED_FILTER\}/);
   });
 });

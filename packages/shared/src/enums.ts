@@ -210,6 +210,20 @@ export const CLARIFICATION_STATUS_ORDER: ClarificationStatus[] = [
 ];
 
 /**
+ * The sets behind the two "still open" figures on the dashboard.
+ *
+ * They live here because the figure and the filter have to be the same set.
+ * The dashboard counts actions that are not completed; the register has to
+ * be able to show exactly those, or a card reading 12 opens a list of 338 and
+ * the officer concludes the count is wrong. `*_FILTER` is the same set as the
+ * register's status parameter spells it.
+ */
+export const ACTION_STATUS_OPEN: ActionStatus[] = ['IN_PROGRESS', 'DELAYED', 'UNDER_REVIEW'];
+export const CLARIFICATION_STATUS_UNCLOSED: ClarificationStatus[] = ['OPEN', 'RESPONDED'];
+export const ACTION_STATUS_OPEN_FILTER = ACTION_STATUS_OPEN.join(',');
+export const CLARIFICATION_STATUS_UNCLOSED_FILTER = CLARIFICATION_STATUS_UNCLOSED.join(',');
+
+/**
  * Captured and displayed. It does NOT route confirmation — which priority
  * needs whose sign-off is an open client decision (docs/01-PRD.md §9).
  * See apps/api/src/modules/items/confirmation.policy.ts.

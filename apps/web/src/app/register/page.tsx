@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   ACTION_STATUS_LABEL,
+  ACTION_STATUS_OPEN_FILTER,
+  ACTION_STATUS_ORDER,
   CLARIFICATION_STATUS_LABEL,
+  CLARIFICATION_STATUS_ORDER,
+  CLARIFICATION_STATUS_UNCLOSED_FILTER,
   PRIORITY_LABEL,
-  type ActionStatus,
-  type ClarificationStatus,
 } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -39,8 +41,16 @@ import { ageing } from './ageing';
  * the API already applies inside the project scope, so this screen cannot show
  * a row the officer is not entitled to see, whatever it asks for.
  */
-const ACTION_STATUSES: ActionStatus[] = ['IN_PROGRESS', 'DELAYED', 'UNDER_REVIEW', 'COMPLETED'];
-const CLARIFICATION_STATUSES: ClarificationStatus[] = ['OPEN', 'RESPONDED', 'CLOSED'];
+/*
+ * From shared, not declared here.
+ *
+ * Both this screen and the dashboard kept their own copy of these lists -
+ * identical, and free to drift the moment a status is added to one of them.
+ * The shared constant is documented as "the order the donut and the register
+ * filters use", which was true of neither.
+ */
+const ACTION_STATUSES = ACTION_STATUS_ORDER;
+const CLARIFICATION_STATUSES = CLARIFICATION_STATUS_ORDER;
 
 interface ProjectOption {
   id: string;
@@ -261,6 +271,14 @@ function Register() {
             <select className="i" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">Any status</option>
               <optgroup label="Actions">
+                {/*
+                  The combined set first, because it is the one the dashboard
+                  counts as "open action items". Without an option carrying
+                  this value, arriving from that card left the control reading
+                  "Any status" above a list filtered to three of them - the
+                  screen contradicting itself about what it was showing.
+                */}
+                <option value={ACTION_STATUS_OPEN_FILTER}>Open — not yet completed</option>
                 {ACTION_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {ACTION_STATUS_LABEL[s]}
@@ -268,6 +286,7 @@ function Register() {
                 ))}
               </optgroup>
               <optgroup label="Clarifications">
+                <option value={CLARIFICATION_STATUS_UNCLOSED_FILTER}>Not yet closed</option>
                 {CLARIFICATION_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {CLARIFICATION_STATUS_LABEL[s]}
