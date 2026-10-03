@@ -165,7 +165,7 @@ export default function Dashboard() {
                   ? `${data.actions.underReview} awaiting confirmation`
                   : `${data.actions.total} raised · ${data.actions.completed} completed`
               }
-              href="/register?type=ACTION"
+              href="/register?type=ACTION&status=IN_PROGRESS,DELAYED,UNDER_REVIEW&live=true"
             />
             {/*
               The denominator is the population this figure is drawn from, not
@@ -189,7 +189,7 @@ export default function Dashboard() {
                   : 'nothing is overdue'
               }
               tone={data.actions.overdue > 0 ? 'red' : undefined}
-              href="/register?type=ACTION&overdue=true"
+              href="/register?type=ACTION&overdue=true&live=true"
             />
             <Hero
               value={data.clarifications.pending}
@@ -200,7 +200,7 @@ export default function Dashboard() {
                   : `${data.clarifications.total} raised · ${data.clarifications.closed} closed`
               }
               tone={data.clarifications.pending > 0 ? 'amber' : undefined}
-              href="/register?type=CLARIFICATION"
+              href="/register?type=CLARIFICATION&status=OPEN,RESPONDED&live=true"
             />
           </div>
 
@@ -218,7 +218,7 @@ export default function Dashboard() {
                     label: ACTION_STATUS_LABEL[s],
                     value: data.actions.byStatus[s] ?? 0,
                     colour: ACTION_TONES[s],
-                    href: `/register?type=ACTION&status=${s}`,
+                    href: `/register?type=ACTION&status=${s}&live=true`,
                   }))}
                   empty="No action is live yet. They go live when the MoM that carries them is circulated."
                 />
@@ -226,7 +226,11 @@ export default function Dashboard() {
               {data.actions.total > 0 && (
                 <div className="flex flex-wrap gap-2 border-t border-line px-[17px] py-3">
                   {ACTION_RING.map((s) => (
-                    <Link key={s} className="btn-ghost" href={`/register?type=ACTION&status=${s}`}>
+                    <Link
+                      key={s}
+                      className="btn-ghost"
+                      href={`/register?type=ACTION&status=${s}&live=true`}
+                    >
                       {ACTION_STATUS_LABEL[s]} →
                     </Link>
                   ))}
@@ -247,7 +251,7 @@ export default function Dashboard() {
                     label: CLARIFICATION_STATUS_LABEL[s],
                     value: data.clarifications.byStatus[s] ?? 0,
                     colour: CLARIFICATION_TONES[s],
-                    href: `/register?type=CLARIFICATION&status=${s}`,
+                    href: `/register?type=CLARIFICATION&status=${s}&live=true`,
                   }))}
                   empty="Nothing has been raised as a clarification yet."
                 />
@@ -258,7 +262,7 @@ export default function Dashboard() {
                     <Link
                       key={s}
                       className="btn-ghost"
-                      href={`/register?type=CLARIFICATION&status=${s}`}
+                      href={`/register?type=CLARIFICATION&status=${s}&live=true`}
                     >
                       {CLARIFICATION_STATUS_LABEL[s]} →
                     </Link>

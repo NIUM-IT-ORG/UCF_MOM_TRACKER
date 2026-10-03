@@ -74,7 +74,13 @@ function Register() {
   const [items, setItems] = useState<ItemRow[] | null>(null);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [openItem, setOpenItem] = useState<string | null>(null);
+  /*
+   * "Needs your attention" on the dashboard links to `/register?item=<id>`
+   * to open one item's drawer. That was read by nothing, so every one of
+   * those rows dropped the officer into the unfiltered register and left
+   * them to find the item themselves.
+   */
+  const [openItem, setOpenItem] = useState<string | null>(() => params.get('item'));
 
   /*
    * Opened from the URL, then owned by this screen.
@@ -100,6 +106,16 @@ function Register() {
   const [raisedById, setRaisedById] = useState(() => params.get('raisedById') ?? '');
   const [mine, setMine] = useState(() => params.get('mine') === 'true');
   const [overdue, setOverdue] = useState(() => params.get('overdue') === 'true');
+  /*
+   * Live only - the set the dashboard counts.
+   *
+   * It is a control and not a hidden default on purpose. The register's job
+   * is to show everything raised, including what is still sitting in an
+   * uncirculated MoM; the dashboard's job is to count what people have
+   * actually been told about. Arriving here from a dashboard figure turns
+   * this on, and the officer can see that is what happened and switch it off.
+   */
+  const [live, setLive] = useState(() => params.get('live') === 'true');
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -108,13 +124,14 @@ function Register() {
     if (projectId) p.set('projectId', projectId);
     if (q.trim()) p.set('q', q.trim());
     if (overdue) p.set('overdue', 'true');
+    if (live) p.set('live', 'true');
     // An explicit choice wins over the shortcut: picking somebody else while
     // "Only mine" is still pressed otherwise silently returns your own items.
     if (ownerId) p.set('ownerId', ownerId);
     else if (mine && user) p.set('ownerId', user.id);
     if (raisedById) p.set('raisedById', raisedById);
     return p.toString();
-  }, [type, status, projectId, q, overdue, mine, ownerId, raisedById, user]);
+  }, [type, status, projectId, q, overdue, live, mine, ownerId, raisedById, user]);
 
   /*
    * Keep the address bar on the filters, so a filtered register can be sent
@@ -132,12 +149,13 @@ function Register() {
     if (projectId) p.set('projectId', projectId);
     if (q.trim()) p.set('q', q.trim());
     if (overdue) p.set('overdue', 'true');
+    if (live) p.set('live', 'true');
     if (ownerId) p.set('ownerId', ownerId);
     else if (mine) p.set('mine', 'true');
     if (raisedById) p.set('raisedById', raisedById);
     const search = p.toString();
     window.history.replaceState(null, '', search ? `/register?${search}` : '/register');
-  }, [type, status, projectId, q, overdue, mine, ownerId, raisedById]);
+  }, [type, status, projectId, q, overdue, live, mine, ownerId, raisedById]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
@@ -339,6 +357,15 @@ function Register() {
               onClick={() => setOverdue((v) => !v)}
             >
               Overdue
+            </button>
+            <button
+              type="button"
+              aria-pressed={live}
+              className={live ? 'btn-primary' : 'btn-ghost'}
+              onClick={() => setLive((v) => !v)}
+              title="Only items a circulated MoM has made live — what the dashboard counts"
+            >
+              Live only
             </button>
           </div>
         </div>

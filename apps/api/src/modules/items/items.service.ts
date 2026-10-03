@@ -110,6 +110,10 @@ export class ItemsService {
       }
       if (clauses.length > 0) where.OR = clauses;
     }
+    // Rule 4, as a filter: before circulation an item exists but nobody has
+    // been told about it. This is what the dashboard counts, and the only way
+    // the register can be asked to show the same set.
+    if (query.live) where.activatedAt = { not: null };
     if (query.overdue) {
       where.dueDate = { lt: new Date() };
       where.actionStatus = { in: ['IN_PROGRESS', 'DELAYED'] };

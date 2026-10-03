@@ -122,6 +122,20 @@ export const respondDto = z
   .strict();
 export type RespondDto = z.infer<typeof respondDto>;
 
+/**
+ * A yes/no flag arriving as a query string.
+ *
+ * Not `z.coerce.boolean()`, which is `Boolean(value)` - so "false" and "0"
+ * both arrive as **true**, and a filter somebody turned off by hand in the
+ * address bar silently stays on.
+ */
+const flag = z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((v) =>
+    typeof v === 'string' ? ['true', '1', 'yes', 'on'].includes(v.trim().toLowerCase()) : v,
+  );
+
 export const itemQueryDto = z.object({
   type: z.enum(['ACTION', 'CLARIFICATION']).optional(),
   status: z.string().optional(),
@@ -136,7 +150,16 @@ export const itemQueryDto = z.object({
    */
   raisedById: cuid.optional(),
   meetingId: cuid.optional(),
-  overdue: z.coerce.boolean().optional(),
+  overdue: flag,
+  /**
+   * Only items the signed MoM has made live.
+   *
+   * The dashboard counts nothing else - an item inside an uncirculated MoM
+   * has been told to nobody - so without this the register could not be asked
+   * the question the dashboard answers, and every figure on that page linked
+   * to a list several times longer than itself.
+   */
+  live: flag,
   q: z.string().trim().optional(),
 });
 export type ItemQueryDto = z.infer<typeof itemQueryDto>;
