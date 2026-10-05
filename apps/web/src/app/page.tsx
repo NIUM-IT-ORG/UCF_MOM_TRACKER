@@ -170,10 +170,15 @@ export default function Dashboard() {
             <Hero
               value={data.actions.pending}
               label="Open action items"
+              /*
+               * "of 16 live" first, always. The ring beside this one is a
+               * breakdown of all sixteen, completed included, and without the
+               * denominator here the two cards read as a contradiction.
+               */
               note={
                 data.actions.underReview > 0
-                  ? `${data.actions.underReview} awaiting confirmation`
-                  : `${data.actions.total} raised · ${data.actions.completed} completed`
+                  ? `of ${data.actions.total} live · ${data.actions.underReview} awaiting confirmation`
+                  : `of ${data.actions.total} live · ${data.actions.completed} completed`
               }
               href={`/register?type=ACTION&status=${ACTION_STATUS_OPEN_FILTER}&live=true`}
             />
@@ -206,8 +211,8 @@ export default function Dashboard() {
               label="Clarifications not yet closed"
               note={
                 data.clarifications.open > 0
-                  ? `${data.clarifications.open} still unanswered`
-                  : `${data.clarifications.total} raised · ${data.clarifications.closed} closed`
+                  ? `of ${data.clarifications.total} live · ${data.clarifications.open} still unanswered`
+                  : `of ${data.clarifications.total} live · ${data.clarifications.closed} closed`
               }
               tone={data.clarifications.pending > 0 ? 'amber' : undefined}
               href={`/register?type=CLARIFICATION&status=${CLARIFICATION_STATUS_UNCLOSED_FILTER}&live=true`}
@@ -217,7 +222,7 @@ export default function Dashboard() {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card
               title="Actions by status"
-              tag={`${data.actions.total} live · click a slice to filter the register`}
+              tag={`${data.actions.total} live · ${data.actions.pending} open, ${data.actions.completed} completed · click a slice`}
             >
               <div className="px-[17px] py-4">
                 <Donut
@@ -250,7 +255,7 @@ export default function Dashboard() {
 
             <Card
               title="Clarifications by status"
-              tag={`${data.clarifications.total} live · Open → Responded → Closed`}
+              tag={`${data.clarifications.total} live · ${data.clarifications.pending} not yet closed, ${data.clarifications.closed} closed`}
             >
               <div className="px-[17px] py-4">
                 <Donut
@@ -285,7 +290,7 @@ export default function Dashboard() {
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card
               title="Actions by priority"
-              tag={`${data.actions.total} live · worst first`}
+              tag={`${data.actions.total} live · every status · worst first`}
             >
               <div className="px-[17px] py-4">
                 <Donut

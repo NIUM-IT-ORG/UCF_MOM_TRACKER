@@ -197,3 +197,42 @@ describe('the priority ring', () => {
     expect(dashboard).toMatch(/unprioritised/);
   });
 });
+
+
+/**
+ * Two cards side by side, counting different things, saying so nowhere.
+ *
+ * "12 open action items" next to "Actions by status · 16" reads as a
+ * contradiction until the reader works out for themselves that the sixteen
+ * includes four completed ones. It was reported as a bug, which is the right
+ * word for it: the arithmetic was sound and the page was not.
+ *
+ * Clarifications hid the same fault behind a coincidence - nothing closed
+ * yet, so both figures read 2. They would have diverged the first time
+ * somebody closed one.
+ */
+describe('a figure and the ring beside it explain each other', () => {
+  it('gives the open-actions card the live total as its denominator', () => {
+    const card = dashboard.slice(
+      dashboard.indexOf('label="Open action items"'),
+      dashboard.indexOf('label="Actions past their date"'),
+    );
+    // Both branches of the note - the one with items awaiting confirmation
+    // and the one without - have to carry it.
+    const notes = [...card.matchAll(/`of \$\{data\.actions\.total\} live/g)];
+    expect(notes).toHaveLength(2);
+  });
+
+  it('gives the clarifications card the same treatment', () => {
+    const card = dashboard.slice(dashboard.indexOf('label="Clarifications not yet closed"'));
+    const notes = [...card.matchAll(/`of \$\{data\.clarifications\.total\} live/g)];
+    expect(notes).toHaveLength(2);
+  });
+
+  it('breaks each ring total into the parts it is made of', () => {
+    expect(dashboard).toMatch(/\$\{data\.actions\.pending\} open, \$\{data\.actions\.completed\} completed/);
+    expect(dashboard).toMatch(
+      /\$\{data\.clarifications\.pending\} not yet closed, \$\{data\.clarifications\.closed\} closed/,
+    );
+  });
+});
