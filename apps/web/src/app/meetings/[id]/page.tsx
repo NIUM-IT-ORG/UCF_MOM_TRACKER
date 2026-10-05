@@ -42,6 +42,7 @@ import { GenerateMom } from './GenerateMom';
 import { MomPreview } from '@/components/MomPreview';
 import { WhoCan } from '@/components/WhoCan';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { DocumentDelete } from '@/components/DocumentDelete';
 import { ShareDialog } from '@/components/ShareDialog';
 import { ItemDrawer } from '@/components/ItemDrawer';
 
@@ -944,6 +945,7 @@ function DocumentsTab({
                   <th>File</th>
                   <th>Added by</th>
                   <th>Added</th>
+                  {canUpload && <th aria-label="Remove" />}
                 </tr>
               </thead>
               <tbody>
@@ -975,6 +977,22 @@ function DocumentsTab({
                     </td>
                     <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
                     <td className="whitespace-nowrap">{formatDate(d.createdAt)}</td>
+                    {canUpload && (
+                      <td className="whitespace-nowrap text-right">
+                        <DocumentDelete
+                          target={`meetings/${meetingId}`}
+                          documentId={d.id}
+                          name={d.name}
+                          /* In the signed PDF unless it was filed afterwards. */
+                          locked={
+                            d.circulatedVersion !== null && !d.afterCirculation
+                              ? { version: d.circulatedVersion }
+                              : undefined
+                          }
+                          onDeleted={onUploaded}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

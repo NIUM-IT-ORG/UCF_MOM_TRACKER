@@ -408,4 +408,20 @@ export class MeetingsController {
   addDocument(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     return this.documents.addToMeeting(user, id, documentInput.parse(body));
   }
+
+  /*
+   * The service writes its own audit row inside the transaction that deletes
+   * the document, rather than this carrying @Audited: the interceptor runs
+   * after a successful response, and a deletion whose trail could be lost
+   * separately from the deletion is not a trail.
+   */
+  @Delete(':id/documents/:documentId')
+  @RequireCapability('manage_project_docs')
+  removeDocument(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.documents.removeFromMeeting(user, id, documentId);
+  }
 }

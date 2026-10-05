@@ -153,6 +153,20 @@ export class FilesService {
     }
     return file;
   }
+
+  /**
+   * Drop a stored file and its bytes, once nothing references it.
+   *
+   * The caller establishes that - this knows about files, not about what
+   * points at them. The object goes first and the row second: a row removed
+   * while the bytes survive leaves an object nobody can ever find again,
+   * where the other order leaves a row whose `read` fails loudly and can be
+   * cleaned up by hand.
+   */
+  async discard(fileId: string, objectKey: string): Promise<void> {
+    await this.storage.remove(objectKey);
+    await this.prisma.storedFile.delete({ where: { id: fileId } });
+  }
 }
 
 export const FILE_LIMITS = { MAX_BYTES, ALLOWED_MIME };

@@ -12,6 +12,7 @@ import { DOCUMENT_TYPE_LABEL, type DocumentType } from '@mom/shared';
 import { formatBytes } from '@/lib/format';
 import { Card, Empty, ItemStatusChip, Notice, PageHead, TableWrap } from '@/components/ui';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { DocumentDelete } from '@/components/DocumentDelete';
 import { Editor } from './Editor';
 import { ItemForm } from './ItemForm';
 import { EditItem } from './EditItem';
@@ -392,6 +393,7 @@ export default function MinutesPage() {
                       <th>Type</th>
                       <th>File</th>
                       <th>Attached by</th>
+                      {canAttach && <th aria-label="Remove" />}
                     </tr>
                   </thead>
                   <tbody>
@@ -426,6 +428,21 @@ export default function MinutesPage() {
                           </small>
                         </td>
                         <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
+                        {canAttach && (
+                          <td className="whitespace-nowrap text-right">
+                            <DocumentDelete
+                              target={`meetings/${id}`}
+                              documentId={d.id}
+                              name={d.name}
+                              locked={
+                                d.circulatedVersion !== null && !d.afterCirculation
+                                  ? { version: d.circulatedVersion }
+                                  : undefined
+                              }
+                              onDeleted={() => void load()}
+                            />
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

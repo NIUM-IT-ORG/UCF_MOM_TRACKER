@@ -175,3 +175,70 @@ describe('annexures filed late', () => {
     expect(minutes).toMatch(/\{numbered\.map\(\(d, n\) =>/);
   });
 });
+
+
+/**
+ * Deleting a filed document.
+ *
+ * The rule that must not bend is the one about annexures. At circulation the
+ * meeting's documents are merged into the signed MoM; removing one afterwards
+ * would not take it out of the PDF in two hundred inboxes, it would only make
+ * this system disagree with the paper everybody is holding. That is rule 6
+ * reaching one step past the MoM itself.
+ *
+ * A document filed *after* that circulation is a different thing - it is on
+ * record but not in the signed copy, the list already marks it so, and it is
+ * an ordinary attachment.
+ */
+describe('removing a document', () => {
+  const service = readFileSync(
+    join(process.cwd(), 'src', 'modules', 'documents', 'documents.service.ts'),
+    'utf8',
+  );
+  const meeting = service.slice(service.indexOf('async removeFromMeeting('));
+
+  it('refuses one that was circulated as an annexure', () => {
+    expect(meeting).toMatch(/doc\.createdAt <= circulated\.circulatedAt/);
+    expect(meeting).toMatch(/cannot be removed/);
+  });
+
+  it('measures that against the most recent circulation, as the list does', () => {
+    expect(meeting.slice(0, 1400)).toMatch(/orderBy: \{ circulatedAt: 'desc' \}/);
+  });
+
+  it('names the corrigendum, because that is the way to change the minutes', () => {
+    expect(meeting).toMatch(/corrigendum/i);
+  });
+
+  it('writes the audit row in the same transaction as the delete', () => {
+    const erase = service.slice(service.indexOf('private async erase('));
+    const tx = erase.slice(erase.indexOf('$transaction'), erase.indexOf('const shared'));
+    expect(tx).toMatch(/tx\.document\.delete/);
+    expect(tx).toMatch(/tx\.auditEntry\.create/);
+    expect(tx).toMatch(/DOCUMENT_DELETED/);
+  });
+
+  it('keeps the bytes until nothing references them', () => {
+    const erase = service.slice(service.indexOf('private async erase('));
+    expect(erase).toMatch(/document\.count\(\{ where: \{ fileId: doc\.fileId \} \}\)/);
+    expect(erase).toMatch(/if \(shared > 0\) return;/);
+  });
+
+  it('loses the bytes rather than the row when storage fails', () => {
+    // An object nobody references costs disk. A row pointing at bytes that
+    // are gone is a document that lists and cannot open.
+    const erase = service.slice(service.indexOf('private async erase('));
+    expect(erase.indexOf('$transaction')).toBeLessThan(erase.indexOf('files.discard'));
+    expect(erase).toMatch(/catch \(err\)/);
+  });
+
+  it('leaves a project document alone, having published nothing', () => {
+    // Comments stripped first: the slice runs up to removeFromMeeting's own
+    // doc comment, which is all about circulation.
+    const project = service
+      .slice(service.indexOf('async removeFromProject('), service.indexOf('async removeFromMeeting('))
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(project).not.toMatch(/circulated/);
+  });
+});

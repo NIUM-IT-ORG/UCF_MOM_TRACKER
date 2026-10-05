@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   createProjectDto,
   documentInput,
@@ -106,5 +117,15 @@ export class ProjectsController {
   addDocument(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: unknown) {
     // Name, type and file all required - see documentInput in packages/shared.
     return this.documents.addToProject(user, id, documentInput.parse(body));
+  }
+
+  @Delete(':id/documents/:documentId')
+  @RequireCapability('manage_project_docs')
+  removeDocument(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.documents.removeFromProject(user, id, documentId);
   }
 }

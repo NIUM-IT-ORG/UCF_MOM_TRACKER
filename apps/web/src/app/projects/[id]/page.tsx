@@ -20,6 +20,7 @@ import {
   Tabs,
 } from '@/components/ui';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { DocumentDelete } from '@/components/DocumentDelete';
 import { ProjectForm } from '../ProjectForm';
 import { UlbForm } from './UlbForm';
 import { MembersForm } from './MembersForm';
@@ -534,6 +535,7 @@ function DocumentsTab({
                   <th>File</th>
                   <th>Added by</th>
                   <th>Added</th>
+                  {canUpload && <th aria-label="Remove" />}
                 </tr>
               </thead>
               <tbody>
@@ -556,6 +558,18 @@ function DocumentsTab({
                     </td>
                     <td className="whitespace-nowrap">{d.uploadedBy.name}</td>
                     <td className="whitespace-nowrap">{formatDate(d.createdAt)}</td>
+                    {canUpload && (
+                      <td className="whitespace-nowrap text-right">
+                        {/* No circulation to respect here - a project's file
+                            room publishes nothing. */}
+                        <DocumentDelete
+                          target={`projects/${projectId}`}
+                          documentId={d.id}
+                          name={d.name}
+                          onDeleted={onUploaded}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

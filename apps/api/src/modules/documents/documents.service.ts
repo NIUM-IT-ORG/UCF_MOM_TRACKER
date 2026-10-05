@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { DocumentInput } from '@mom/shared';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
@@ -21,6 +21,8 @@ const DOC_SELECT = {
 
 @Injectable()
 export class DocumentsService {
+  private readonly log = new Logger('Documents');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
@@ -141,6 +143,130 @@ export class DocumentsService {
       select: { id: true },
     });
     if (!project) throw AppError.notFound('That project');
+  }
+
+  /**
+   * Removing a project document.
+   *
+   * A project's file room is a working set - a superseded estimate, a letter
+   * filed twice, a scan of the wrong page - and nothing has been published
+   * from it, so it carries no immutability claim. The capability and the
+   * project scope are the whole guard.
+   */
+  async removeFromProject(user: AuthUser, projectId: string, documentId: string) {
+    await this.mustSeeProject(user, projectId);
+    const doc = await this.prisma.document.findFirst({
+      where: { id: documentId, projectId },
+      select: { id: true, name: true, type: true, fileId: true, createdAt: true },
+    });
+    if (!doc) throw AppError.notFound('That document');
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { code: true },
+    });
+    await this.erase(user, doc, project?.code ?? projectId, 'project');
+    return { id: doc.id };
+  }
+
+  /**
+   * Removing a meeting document.
+   *
+   * Different from a project document in one way that matters: at circulation
+   * the meeting's documents are merged into the signed MoM as numbered
+   * annexures. One that is inside a circulated document cannot be removed -
+   * deleting A-02 from the system would not take it out of the PDF in two
+   * hundred inboxes, it would only make this system disagree with the paper
+   * everybody is holding. That is rule 6, reaching one step past the MoM
+   * itself.
+   *
+   * One filed *after* that circulation is not in the signed PDF - the list
+   * already marks it as such - so it is an ordinary attachment and goes.
+   */
+  async removeFromMeeting(user: AuthUser, meetingId: string, documentId: string) {
+    const meeting = await this.prisma.meeting.findFirst({
+      where: { AND: [{ id: meetingId }, meetingScope(user)] },
+      select: { id: true, code: true },
+    });
+    if (!meeting) throw AppError.notFound('That meeting');
+
+    const doc = await this.prisma.document.findFirst({
+      where: { id: documentId, meetingId },
+      select: { id: true, name: true, type: true, fileId: true, createdAt: true },
+    });
+    if (!doc) throw AppError.notFound('That document');
+
+    const circulated = await this.prisma.mom.findFirst({
+      where: { meetingId, circulatedAt: { not: null } },
+      orderBy: { circulatedAt: 'desc' },
+      select: { circulatedAt: true, version: true },
+    });
+    if (circulated?.circulatedAt && doc.createdAt <= circulated.circulatedAt) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `"${doc.name}" was circulated as an annexure to version ${circulated.version} of the MoM, so it cannot be removed - deleting it here would not take it out of the copies people were sent. Issue a corrigendum if the minutes need to change.`,
+        { field: 'documentId' },
+      );
+    }
+
+    await this.erase(user, doc, meeting.code, 'meeting');
+    return { id: doc.id };
+  }
+
+  /**
+   * The deletion itself: the row and its audit trail in one transaction, then
+   * the bytes.
+   *
+   * That order is deliberate. If the bytes went first and the transaction
+   * then failed, the row would survive pointing at a file that no longer
+   * exists - a document that lists but cannot open. The other way round the
+   * worst case is an object nobody references, which costs disk and nothing
+   * else, and is logged.
+   *
+   * The stored file is only removed when no other document shares it.
+   */
+  private async erase(
+    user: AuthUser,
+    doc: { id: string; name: string; type: string; fileId: string; createdAt: Date },
+    ref: string,
+    kind: 'project' | 'meeting',
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.document.delete({ where: { id: doc.id } });
+      await tx.auditEntry.create({
+        data: {
+          actorId: user.id,
+          objectType: 'DOCUMENT',
+          objectId: doc.id,
+          objectRef: ref,
+          event: 'DOCUMENT_DELETED',
+          detail: `Removed from the ${kind}: "${doc.name}"`,
+          before: {
+            name: doc.name,
+            type: doc.type,
+            fileId: doc.fileId,
+            filedAt: doc.createdAt.toISOString(),
+          },
+        },
+      });
+    });
+
+    const shared = await this.prisma.document.count({ where: { fileId: doc.fileId } });
+    if (shared > 0) return;
+
+    try {
+      const file = await this.prisma.storedFile.findUnique({
+        where: { id: doc.fileId },
+        select: { objectKey: true },
+      });
+      if (file) await this.files.discard(doc.fileId, file.objectKey);
+    } catch (err) {
+      this.log.warn(
+        `Document ${doc.id} is gone but its file ${doc.fileId} was not: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   /** You may only attach a file you uploaded — not one whose id you guessed. */
