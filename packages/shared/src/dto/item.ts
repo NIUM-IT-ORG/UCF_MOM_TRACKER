@@ -139,6 +139,15 @@ const flag = z
 export const itemQueryDto = z.object({
   type: z.enum(['ACTION', 'CLARIFICATION']).optional(),
   status: z.string().optional(),
+  /**
+   * One priority or several, comma separated, as `status` is spelled.
+   *
+   * Every action has carried a priority since Phase 4 and nothing could read
+   * it back: it was printed in the MoM and shown in the register, and "the
+   * Very High actions that are overdue" - the question a Mission Director
+   * actually asks - had no answer anywhere in the product.
+   */
+  priority: z.string().optional(),
   projectId: cuid.optional(),
   ownerId: cuid.optional(),
   /**

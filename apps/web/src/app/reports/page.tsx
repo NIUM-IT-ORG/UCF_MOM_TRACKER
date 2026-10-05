@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { PRIORITY_LABEL, PRIORITY_ORDER } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { Card, Empty, Notice, PageHead, TableWrap } from '@/components/ui';
 
@@ -42,6 +43,7 @@ export default function ReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [priority, setPriority] = useState('');
   const [table, setTable] = useState<ReportTable | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -61,11 +63,13 @@ export default function ReportsPage() {
       if (from) p.set('from', from);
       if (to) p.set('to', to);
       if (projectId) p.set('projectId', projectId);
+      // Only one report has a priority column, so only that one is sent it.
+      if (priority && active === 'action-taken') p.set('priority', priority);
       if (format) p.set('format', format);
       const s = p.toString();
       return s ? `?${s}` : '';
     },
-    [from, to, projectId],
+    [from, to, projectId, priority, active],
   );
 
   const load = useCallback(() => {
@@ -160,6 +164,23 @@ export default function ReportsPage() {
               ))}
             </select>
           </label>
+          {active === 'action-taken' && (
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-bold text-navy">Priority</span>
+              <select
+                className="i"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+              >
+                <option value="">Any priority</option>
+                {PRIORITY_ORDER.map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </Card>
 

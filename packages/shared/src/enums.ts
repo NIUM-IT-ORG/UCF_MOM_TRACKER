@@ -243,6 +243,26 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
   LOW: 'Low',
   LOWER: 'Lower',
 };
+/**
+ * Severity, as a ramp rather than five unrelated hues.
+ *
+ * Priority is ordered in a way status is not - Very High is *worse* than
+ * High, where In Progress is not worse than Delayed, it is different. So the
+ * colours run hot to cool, and a reader can rank the ring without the legend.
+ *
+ * Deliberately not reusing the status palette. The two vocabularies appear on
+ * the same screen, and a Very High slice in the same amber as In Progress
+ * would be read as the same fact.
+ */
+export const PRIORITY_COLOR: Record<Priority, string> = {
+  VERY_HIGH: '#8E1B13',
+  HIGH: '#D2662A',
+  MEDIUM: '#E0A92E',
+  LOW: '#4E7CA8',
+  LOWER: '#8A9BAE',
+};
+/** Worst first, which is the order anybody reads a priority list in. */
+export const PRIORITY_ORDER: Priority[] = ['VERY_HIGH', 'HIGH', 'MEDIUM', 'LOW', 'LOWER'];
 
 export const ProjectStatus = {
   PLANNING: 'PLANNING',

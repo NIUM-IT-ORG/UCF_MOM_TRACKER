@@ -11,7 +11,11 @@ import {
   CLARIFICATION_STATUS_LABEL,
   CLARIFICATION_STATUS_ORDER,
   CLARIFICATION_STATUS_UNCLOSED_FILTER,
+  PRIORITY_COLOR,
+  PRIORITY_LABEL,
+  PRIORITY_ORDER,
   type ActionStatus,
+  type Priority,
   type ClarificationStatus,
   type MeetingStage,
   type MeetingType,
@@ -31,6 +35,7 @@ import {
   TableWrap,
 } from '@/components/ui';
 import { Donut } from '@/components/Donut';
+import { MonthlyBars } from '@/components/MonthlyBars';
 
 /**
  * The dashboard.
@@ -64,6 +69,9 @@ interface Summary {
     underReview: number;
     overdue: number;
     byStatus: Record<ActionStatus, number>;
+    byPriority: Record<Priority, number>;
+    /** Live actions raised without one - a gap in the minuting, not a status. */
+    unprioritised: number;
   };
   clarifications: {
     total: number;
@@ -92,6 +100,7 @@ interface Summary {
     stage: MeetingStage;
   }[];
   attention: { tone: string; text: string; href: string; action: string }[];
+  movement: { month: string; raised: number; closed: number }[];
 }
 
 /*
@@ -270,6 +279,62 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+            </Card>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card
+              title="Actions by priority"
+              tag={`${data.actions.total} live · worst first`}
+            >
+              <div className="px-[17px] py-4">
+                <Donut
+                  total={data.actions.total}
+                  totalLabel="Actions"
+                  slices={PRIORITY_ORDER.map((p) => ({
+                    key: p,
+                    label: PRIORITY_LABEL[p],
+                    value: data.actions.byPriority[p] ?? 0,
+                    colour: PRIORITY_COLOR[p],
+                    href: `/register?type=ACTION&priority=${p}&live=true`,
+                  }))}
+                  empty="No action is live yet. They go live when the MoM that carries them is circulated."
+                />
+              </div>
+              {data.actions.unprioritised > 0 && (
+                <div className="border-t border-line px-[17px] py-3 text-[11.5px] text-muted">
+                  {/*
+                    Said out loud rather than folded into a slice. The ring
+                    totals the live actions, so an action raised without a
+                    priority would otherwise make the slices add up to less
+                    than the number beside the title with no explanation.
+                  */}
+                  <b className="text-navy">{data.actions.unprioritised}</b>{' '}
+                  {data.actions.unprioritised === 1 ? 'action carries' : 'actions carry'} no
+                  priority. They were minuted without one — the ring counts them in the total
+                  and in no slice.
+                </div>
+              )}
+            </Card>
+
+            <Card
+              title="Raised against closed"
+              tag="Twelve months · actions"
+            >
+              <div className="px-[17px] py-4">
+                <MonthlyBars
+                  data={data.movement}
+                  raisedLabel="Raised"
+                  closedLabel="Closed"
+                  raisedColour={ACTION_STATUS_COLOR.IN_PROGRESS}
+                  closedColour={ACTION_STATUS_COLOR.COMPLETED}
+                  empty="Nothing has gone live or been closed in the last twelve months."
+                />
+              </div>
+              <div className="border-t border-line px-[17px] py-3 text-[11.5px] text-muted">
+                An action is counted as raised in the month its MoM was circulated, not the month
+                it was typed — before that nobody had been told about it.
+              </div>
             </Card>
           </div>
 

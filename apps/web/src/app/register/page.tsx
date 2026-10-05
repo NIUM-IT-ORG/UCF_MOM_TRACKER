@@ -11,6 +11,7 @@ import {
   CLARIFICATION_STATUS_ORDER,
   CLARIFICATION_STATUS_UNCLOSED_FILTER,
   PRIORITY_LABEL,
+  PRIORITY_ORDER,
 } from '@mom/shared';
 import { ApiError, api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -102,6 +103,7 @@ function Register() {
   const [status, setStatus] = useState(() => params.get('status') ?? '');
   const [projectId, setProjectId] = useState(() => params.get('projectId') ?? '');
   const [q, setQ] = useState(() => params.get('q') ?? '');
+  const [priority, setPriority] = useState(() => params.get('priority') ?? '');
   /*
    * Who is responsible, as a filter.
    *
@@ -133,6 +135,7 @@ function Register() {
     if (status) p.set('status', status);
     if (projectId) p.set('projectId', projectId);
     if (q.trim()) p.set('q', q.trim());
+    if (priority) p.set('priority', priority);
     if (overdue) p.set('overdue', 'true');
     if (live) p.set('live', 'true');
     // An explicit choice wins over the shortcut: picking somebody else while
@@ -141,7 +144,7 @@ function Register() {
     else if (mine && user) p.set('ownerId', user.id);
     if (raisedById) p.set('raisedById', raisedById);
     return p.toString();
-  }, [type, status, projectId, q, overdue, live, mine, ownerId, raisedById, user]);
+  }, [type, status, projectId, q, priority, overdue, live, mine, ownerId, raisedById, user]);
 
   /*
    * Keep the address bar on the filters, so a filtered register can be sent
@@ -158,6 +161,7 @@ function Register() {
     if (status) p.set('status', status);
     if (projectId) p.set('projectId', projectId);
     if (q.trim()) p.set('q', q.trim());
+    if (priority) p.set('priority', priority);
     if (overdue) p.set('overdue', 'true');
     if (live) p.set('live', 'true');
     if (ownerId) p.set('ownerId', ownerId);
@@ -165,7 +169,7 @@ function Register() {
     if (raisedById) p.set('raisedById', raisedById);
     const search = p.toString();
     window.history.replaceState(null, '', search ? `/register?${search}` : '/register');
-  }, [type, status, projectId, q, overdue, live, mine, ownerId, raisedById]);
+  }, [type, status, projectId, q, priority, overdue, live, mine, ownerId, raisedById]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
@@ -263,6 +267,27 @@ function Register() {
               <option value="">Actions and clarifications</option>
               <option value="ACTION">Actions only</option>
               <option value="CLARIFICATION">Clarifications only</option>
+            </select>
+          </label>
+
+          <label className="block">
+            {/*
+              Actions only - a clarification has no priority, and the server
+              returns nothing for one, which is the honest answer rather than
+              a surprise.
+            */}
+            <span className="mb-1 block text-[11px] font-bold text-navy">Priority</span>
+            <select
+              className="i"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            >
+              <option value="">Any priority</option>
+              {PRIORITY_ORDER.map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABEL[p]}
+                </option>
+              ))}
             </select>
           </label>
 

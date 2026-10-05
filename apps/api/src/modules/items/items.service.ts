@@ -25,6 +25,7 @@ import { canSeeProject, projectScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { nextItemRef } from '../meetings/meeting-code.js';
+import { PRIORITY_ORDER, type Priority } from '@mom/shared';
 import { advanceAction, advanceClarification, daysOverdue } from './item.machine.js';
 import { mayConfirm } from './confirmation.policy.js';
 
@@ -109,6 +110,21 @@ export class ItemsService {
         clauses.push({ clarificationStatus: { in: clarificationStatuses } });
       }
       if (clauses.length > 0) where.OR = clauses;
+    }
+    if (query.priority) {
+      /*
+       * Comma separated, as `status` is. Unknown values are refused rather
+       * than ignored: a typo that silently returns everything is how a
+       * register quietly answers a question nobody asked.
+       */
+      const wanted = query.priority.split(',').map((p) => p.trim()).filter(Boolean);
+      const bad = wanted.filter((p) => !PRIORITY_ORDER.includes(p as Priority));
+      if (bad.length > 0) {
+        throw new AppError('VALIDATION_FAILED', 'That is not a priority this register uses.', {
+          field: 'priority',
+        });
+      }
+      where.priority = { in: wanted as Priority[] };
     }
     // Rule 4, as a filter: before circulation an item exists but nobody has
     // been told about it. This is what the dashboard counts, and the only way

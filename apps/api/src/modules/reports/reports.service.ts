@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { AppError } from '../../common/app-error.js';
 import { meetingScope, projectScope, projectIdScope, seesAll } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
+import { PRIORITY_ORDER, type Priority } from '@mom/shared';
 
 /**
  * The six reports.
@@ -38,6 +39,14 @@ export interface ReportQuery {
   from?: string;
   to?: string;
   projectId?: string;
+  /**
+   * One priority or several, comma separated.
+   *
+   * Only the action-taken report reads it - it is the only one with a
+   * priority column, and a filter that silently did nothing on the other five
+   * would be worse than not offering it at all.
+   */
+  priority?: string;
 }
 
 export const REPORTS = [
@@ -76,6 +85,21 @@ export const REPORTS = [
 export type ReportKey = (typeof REPORTS)[number]['key'];
 
 const LIVE = { activatedAt: { not: null } } as const;
+
+/** The report's priority filter, spelled exactly as the register spells it. */
+function priorityFilter(q: ReportQuery) {
+  if (!q.priority) return {};
+  const wanted = q.priority
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p): p is Priority => PRIORITY_ORDER.includes(p as Priority));
+  if (wanted.length === 0) {
+    throw new AppError('VALIDATION_FAILED', 'That is not a priority this report uses.', {
+      field: 'priority',
+    });
+  }
+  return { priority: { in: wanted } };
+}
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
 @Injectable()
@@ -105,6 +129,7 @@ export class ReportsService {
         ...LIVE,
         type: 'ACTION',
         ...(q.projectId ? { projectId: q.projectId } : {}),
+        ...priorityFilter(q),
         ...dateWindow(q, 'dueDate'),
       },
       select: {

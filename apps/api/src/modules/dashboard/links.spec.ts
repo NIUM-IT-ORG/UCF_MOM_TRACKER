@@ -162,3 +162,38 @@ describe('the ring and the register speak one vocabulary', () => {
     expect(register).toMatch(/value=\{CLARIFICATION_STATUS_UNCLOSED_FILTER\}/);
   });
 });
+
+
+/**
+ * Priority was captured on every action since Phase 4 and read back by
+ * nothing: printed in the MoM, shown in the register, and filterable nowhere,
+ * so "the Very High actions that are overdue" had no answer in the product.
+ * These hold the new ring to the same rule as the other two - a slice that
+ * cannot be clicked through to its own list is decoration.
+ */
+describe('the priority ring', () => {
+  it('links each slice to that priority in the register', () => {
+    const byPriority = links.filter((l) => l.includes('priority='));
+    expect(byPriority.length).toBeGreaterThanOrEqual(1);
+    for (const l of byPriority) {
+      expect(l, l).toMatch(/(^|&)live=true/);
+      expect(l, l).toMatch(/(^|&)type=ACTION/);
+    }
+  });
+
+  it('takes its colours and its order from shared, as the status rings do', () => {
+    expect(dashboard).toMatch(/colour: PRIORITY_COLOR\[p\]/);
+    expect(dashboard).toMatch(/PRIORITY_ORDER\.map/);
+  });
+
+  it('is answerable by the register', () => {
+    expect(register).toMatch(/params\.get\('priority'\)/);
+    expect(service).toMatch(/where\.priority = \{ in: wanted as Priority\[\] \}/);
+  });
+
+  it('says out loud how many actions carry no priority', () => {
+    // Otherwise the slices total less than the number beside the title and
+    // nothing on the page explains the difference.
+    expect(dashboard).toMatch(/unprioritised/);
+  });
+});

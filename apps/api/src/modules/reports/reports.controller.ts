@@ -34,9 +34,10 @@ export class ReportsController {
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('projectId') projectId: string | undefined,
+    @Query('priority') priority: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const table = await this.reports.build(user, key, { from, to, projectId });
+    const table = await this.reports.build(user, key, { from, to, projectId, priority });
 
     if (format === 'csv') {
       res.setHeader('content-type', 'text/csv; charset=utf-8');
