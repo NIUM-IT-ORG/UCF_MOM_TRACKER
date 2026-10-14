@@ -94,6 +94,32 @@ describe('naming a month', () => {
   });
 });
 
+describe('the admin screen reports its own effect', () => {
+  /*
+   * It did not. The list counted every item ever raised, while the dashboard
+   * counts only circulated ones - so on the client's data a row offered to
+   * take 83 actions off a page that was showing 13, and the banner totalled
+   * 349 against a dashboard counting 16. An administrator deciding from those
+   * numbers is deciding from fiction.
+   */
+  it('counts live items, the same rule the dashboard counts by', () => {
+    const list = service.slice(service.indexOf('async list('));
+    expect(list).toMatch(/items: \{ where: \{ activatedAt: \{ not: null \} \}, select: \{ type: true \} \}/);
+  });
+
+  it('counts meetings without that rule, since a meeting is held either way', () => {
+    const list = service.slice(service.indexOf('async list('));
+    expect(list).toMatch(/row\.meetings \+= 1/);
+  });
+
+  it('says on the screen that the columns are live only', () => {
+    const page = read('apps', 'web', 'src', 'app', 'dashboard-months', 'page.tsx');
+    expect(page).toMatch(/Live actions/);
+    // Collapsed first: the sentence is line-wrapped in the JSX.
+    expect(page.replace(/\s+/g, ' ')).toMatch(/never appeared on the dashboard/);
+  });
+});
+
 describe('a month nobody has configured', () => {
   it('is counted, because only disabled rows are read', () => {
     const q = service.slice(service.indexOf('async disabledMonths('));

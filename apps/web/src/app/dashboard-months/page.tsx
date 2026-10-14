@@ -114,8 +114,8 @@ export default function DashboardMonthsPage() {
           <b>
             {hidden.length} {hidden.length === 1 ? 'month is' : 'months are'} switched off
           </b>
-          , taking {hiddenItems} {hiddenItems === 1 ? 'item' : 'items'} out of the dashboard:{' '}
-          {hidden.map((h) => monthLabel(h.month)).join(', ')}.
+          , taking {hiddenItems} live {hiddenItems === 1 ? 'item' : 'items'} out of the
+          dashboard: {hidden.map((h) => monthLabel(h.month)).join(', ')}.
         </Notice>
       )}
 
@@ -138,8 +138,8 @@ export default function DashboardMonthsPage() {
                   <tr>
                     <th>Month</th>
                     <th>Meetings</th>
-                    <th>Actions</th>
-                    <th>Clarifications</th>
+                    <th>Live actions</th>
+                    <th>Live clarifications</th>
                     <th>On the dashboard</th>
                     <th>Last changed</th>
                     <th aria-label="Switch" />
@@ -200,6 +200,12 @@ export default function DashboardMonthsPage() {
             A month with no row here has never been configured, and is counted. New months are
             counted from the moment their first meeting is held — nobody has to remember to
             switch them on.
+            <br />
+            The two item columns count <b>live</b> items only — ones whose signed MoM has been
+            circulated. An action still sitting in an unsigned MoM has never appeared on the
+            dashboard, so switching its month off removes nothing. If these columns read zero
+            against a month full of meetings, that month&rsquo;s minutes were never circulated,
+            and that is a different problem from a cluttered dashboard.
           </div>
         </Card>
       </div>

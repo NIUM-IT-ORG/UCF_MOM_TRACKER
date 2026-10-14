@@ -36,7 +36,9 @@ export interface MonthRow {
   month: string;
   enabled: boolean;
   meetings: number;
+  /** Live actions - what the dashboard counts, not everything ever raised. */
   actions: number;
+  /** Live clarifications, on the same rule. */
   clarifications: number;
   updatedAt: string | null;
   updatedBy: string | null;
@@ -82,8 +84,18 @@ export class MonthVisibilityService {
       where: meetingScope(user),
       select: {
         meetingDate: true,
-        _count: { select: { items: true } },
-        items: { select: { type: true } },
+        /*
+         * Live items only - the ones the dashboard actually counts.
+         *
+         * This screen exists to tell an administrator what a switch will do,
+         * and counting every item raised told them something else entirely.
+         * On the client's data August held 83 actions of which 13 had been
+         * circulated, so the row promised to remove 83 from a page that was
+         * only ever showing 13, and the banner totalled 349 against a
+         * dashboard counting 16. A control that misreports its own effect by
+         * twentyfold is worse than no control.
+         */
+        items: { where: { activatedAt: { not: null } }, select: { type: true } },
       },
       orderBy: { meetingDate: 'desc' },
     });
