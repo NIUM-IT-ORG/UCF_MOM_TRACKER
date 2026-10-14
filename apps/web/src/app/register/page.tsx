@@ -128,6 +128,16 @@ function Register() {
    * this on, and the officer can see that is what happened and switch it off.
    */
   const [live, setLive] = useState(() => params.get('live') === 'true');
+  /*
+   * Months a System Administrator has switched off, left out by default.
+   *
+   * On by default is the point - the register was the screen still showing
+   * everything after nine months had been switched off. It is a button and
+   * not a silent rule because this is the register: it is where an officer
+   * goes to find their own commitment, and one that cannot be found is worse
+   * than one that is listed among old rows.
+   */
+  const [hideMonths, setHideMonths] = useState(() => params.get('allMonths') !== 'true');
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -138,13 +148,14 @@ function Register() {
     if (priority) p.set('priority', priority);
     if (overdue) p.set('overdue', 'true');
     if (live) p.set('live', 'true');
+    if (hideMonths) p.set('excludeHiddenMonths', 'true');
     // An explicit choice wins over the shortcut: picking somebody else while
     // "Only mine" is still pressed otherwise silently returns your own items.
     if (ownerId) p.set('ownerId', ownerId);
     else if (mine && user) p.set('ownerId', user.id);
     if (raisedById) p.set('raisedById', raisedById);
     return p.toString();
-  }, [type, status, projectId, q, priority, overdue, live, mine, ownerId, raisedById, user]);
+  }, [type, status, projectId, q, priority, overdue, live, hideMonths, mine, ownerId, raisedById, user]);
 
   /*
    * Keep the address bar on the filters, so a filtered register can be sent
@@ -164,12 +175,15 @@ function Register() {
     if (priority) p.set('priority', priority);
     if (overdue) p.set('overdue', 'true');
     if (live) p.set('live', 'true');
+    // The URL carries the exception, not the default, so a plain /register
+    // link behaves the way the screen does.
+    if (!hideMonths) p.set('allMonths', 'true');
     if (ownerId) p.set('ownerId', ownerId);
     else if (mine) p.set('mine', 'true');
     if (raisedById) p.set('raisedById', raisedById);
     const search = p.toString();
     window.history.replaceState(null, '', search ? `/register?${search}` : '/register');
-  }, [type, status, projectId, q, priority, overdue, live, mine, ownerId, raisedById]);
+  }, [type, status, projectId, q, priority, overdue, live, hideMonths, mine, ownerId, raisedById]);
 
   const load = useCallback(() => {
     api<ItemRow[]>(`/items${query ? `?${query}` : ''}`)
@@ -404,6 +418,15 @@ function Register() {
             </button>
             <button
               type="button"
+              aria-pressed={!hideMonths}
+              className={!hideMonths ? 'btn-primary' : 'btn-ghost'}
+              onClick={() => setHideMonths((v) => !v)}
+              title="Months switched off in System → Dashboard months are left out of this list by default"
+            >
+              {hideMonths ? 'Show hidden months' : 'Hiding nothing'}
+            </button>
+            <button
+              type="button"
               aria-pressed={live}
               className={live ? 'btn-primary' : 'btn-ghost'}
               onClick={() => setLive((v) => !v)}
@@ -414,6 +437,14 @@ function Register() {
           </div>
         </div>
       </Card>
+
+      {hideMonths && (
+        <p className="mt-3 mb-0 text-[11.5px] text-muted">
+          Months switched off in <b className="text-navy">System &rarr; Dashboard months</b> are
+          left out of this list. Nothing was deleted — use <b>Show hidden months</b> to see
+          them, or open the item by its reference.
+        </p>
+      )}
 
       <div className="mt-4">
         <Card title="The register" tag={items ? `${items.length} shown` : 'Loading…'}>

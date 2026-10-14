@@ -169,6 +169,15 @@ export const itemQueryDto = z.object({
    * to a list several times longer than itself.
    */
   live: flag,
+  /**
+   * Leave out months a System Administrator has switched off.
+   *
+   * Opt-in, and sent only by the register. Every other caller of this
+   * endpoint asks about one meeting - the minutes editor, the meeting's own
+   * item list - and applying a month filter to those would empty the screen
+   * somebody is trying to minute on.
+   */
+  excludeHiddenMonths: flag,
   q: z.string().trim().optional(),
 });
 export type ItemQueryDto = z.infer<typeof itemQueryDto>;

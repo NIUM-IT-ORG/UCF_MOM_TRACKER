@@ -26,6 +26,7 @@ import type { AuthUser } from '../auth/auth-user.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { nextItemRef } from '../meetings/meeting-code.js';
 import { PRIORITY_ORDER, type Priority } from '@mom/shared';
+import { MonthVisibilityService } from '../dashboard/month-visibility.service.js';
 import { advanceAction, advanceClarification, daysOverdue } from './item.machine.js';
 import { mayConfirm } from './confirmation.policy.js';
 
@@ -69,12 +70,36 @@ export class ItemsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: NotificationsService,
+    private readonly months: MonthVisibilityService,
   ) {}
 
   // ── reading ──────────────────────────────────────────────────────────
 
   async list(user: AuthUser, query: ItemQueryDto = {}) {
     const where: Prisma.ItemWhereInput = { ...projectScope(user) };
+
+    /*
+     * Months a System Administrator has switched off.
+     *
+     * Opt-in, and asked for only by the register. The minutes editor and a
+     * meeting's own item list call this endpoint too, and hiding a month from
+     * those would blank the screen somebody is trying to minute on - the
+     * meeting they are working in is, by definition, in its own month.
+     *
+     * This hides rows from a list. It changes nothing about the items: an
+     * item in a switched-off month is still live, still assigned and still
+     * overdue if its date has passed, and asking for it by id still returns
+     * it.
+     */
+    if (query.excludeHiddenMonths) {
+      const disabled = await this.months.disabledMonths();
+      if (disabled.length > 0) {
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          ...MonthVisibilityService.excludeClause(disabled).map((c) => ({ NOT: c })),
+        ];
+      }
+    }
 
     if (query.type) where.type = query.type;
     if (query.meetingId) where.meetingId = query.meetingId;
@@ -137,7 +162,11 @@ export class ItemsService {
       where.activatedAt = { not: null };
     }
     if (query.q) {
+      // Appended, not assigned: the month filter above also uses AND, and
+      // searching while it was on would otherwise have silently switched it
+      // off - the one keystroke that brings the hidden rows back.
       where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
         {
           OR: [
             { description: { contains: query.q, mode: 'insensitive' } },

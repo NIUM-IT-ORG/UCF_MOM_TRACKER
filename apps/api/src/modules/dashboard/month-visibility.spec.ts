@@ -156,8 +156,29 @@ describe('what a switched-off month does and does not reach', () => {
     expect(movement).toMatch(/\.\.\.excludeMonths,/);
   });
 
-  it('does not reach the register', () => {
-    expect(items).not.toMatch(/dashboardMonth|disabledMonths|excludeClause/);
+  /*
+   * The register was the screen still showing everything after nine months
+   * had been switched off, and it was reported twice. It leaves them out now
+   * - but by asking, not by default, because this endpoint also serves the
+   * minutes editor and a meeting's own item list, and a month filter there
+   * would blank the screen somebody is trying to minute on.
+   */
+  it('reaches the register only when the caller asks', () => {
+    expect(items).toMatch(/if \(query\.excludeHiddenMonths\)/);
+    const block = items.slice(items.indexOf('if (query.excludeHiddenMonths)'));
+    expect(block.slice(0, 500)).toMatch(/disabledMonths\(\)/);
+  });
+
+  it('negates each month separately, so several can be hidden at once', () => {
+    const block = items.slice(items.indexOf('if (query.excludeHiddenMonths)'));
+    expect(block.slice(0, 500)).toMatch(/\.map\(\(c\) => \(\{ NOT: c \}\)\)/);
+  });
+
+  it('appends to AND rather than assigning, so the search box cannot undo it', () => {
+    // `where.AND = [...]` in the q filter would otherwise drop the month
+    // clause - one keystroke bringing every hidden row back.
+    const q = items.slice(items.indexOf('if (query.q)'));
+    expect(q.slice(0, 400)).toMatch(/Array\.isArray\(where\.AND\)/);
   });
 
   it('does not reach the reports', () => {
