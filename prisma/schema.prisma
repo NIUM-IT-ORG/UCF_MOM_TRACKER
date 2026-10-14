@@ -240,6 +240,7 @@ model User {
   /// MoMs routed to this officer for signature, and those they have signed.
   momsToSign Mom[] @relation("MomSignatory")
   momsSigned Mom[] @relation("MomSignedBy")
+  dashboardMonths DashboardMonth[]
 }
 
 /// The second half of the access rule: which projects a user can see.
@@ -593,6 +594,28 @@ model StoredFile {
 
 /// Both a name and a file are mandatory — enforced by NOT NULL here and by
 /// the DTO. A file without a name makes a repository unusable within a year.
+/// Which months' actions the dashboard counts.
+///
+/// A row exists only for a month somebody has configured; absent means
+/// enabled. That default is what makes a new month appear the moment its
+/// first meeting is held, rather than waiting on an administrator to
+/// remember to switch it on.
+///
+/// This is a reporting window and nothing else. An item in a disabled month
+/// is still live, still assigned, still in the register and still in every
+/// report - it has only stopped being counted on one page.
+model DashboardMonth {
+  /// The meeting's month, as "2026-09". Checked by the database.
+  month       String   @id @db.Char(7)
+  enabled     Boolean  @default(true)
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("dashboard_months")
+}
+
 model Document {
   id        String        @id @default(cuid())
   scope     DocumentScope

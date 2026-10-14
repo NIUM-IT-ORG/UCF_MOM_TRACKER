@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { meetingScope, projectScope, projectIdScope } from '../../common/scope.js';
 import type { AuthUser } from '../auth/auth-user.js';
 import { buildAttention } from './attention.js';
+import { MonthVisibilityService } from './month-visibility.service.js';
 
 /**
  * The dashboard figures.
@@ -24,11 +25,29 @@ const LIVE = { activatedAt: { not: null } } as const;
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly months: MonthVisibilityService,
+  ) {}
 
   async summary(user: AuthUser) {
-    const itemWhere = { ...projectScope(user), ...LIVE };
     const now = new Date();
+
+    /*
+     * Months an administrator has switched off.
+     *
+     * Applied to every item figure on this page and to nothing else: the
+     * register, the reports and the meeting's own screens are unaffected, and
+     * an item hidden here is still live, still assigned and still overdue if
+     * its date has passed. `hidden` goes back with the figures so the page can
+     * say what it is leaving out - a dashboard that silently reports less than
+     * the truth is worse than a cluttered one.
+     */
+    const disabled = await this.months.disabledMonths();
+    const excludeMonths =
+      disabled.length > 0 ? { NOT: MonthVisibilityService.excludeClause(disabled) } : {};
+
+    const itemWhere = { ...projectScope(user), ...LIVE, ...excludeMonths };
 
     const [
       meetingsByStage,
@@ -72,6 +91,7 @@ export class DashboardService {
       this.prisma.item.findMany({
         where: {
           ...projectScope(user),
+          ...excludeMonths,
           type: 'ACTION',
           OR: [{ activatedAt: { gte: monthsAgo(now, 11) } }, { closedAt: { gte: monthsAgo(now, 11) } }],
         },
@@ -164,6 +184,7 @@ export class DashboardService {
           this.prisma.item.count({
             where: {
               ...LIVE,
+              ...excludeMonths,
               projectId: p.id,
               type: 'ACTION',
               actionStatus: { in: ['IN_PROGRESS', 'DELAYED', 'UNDER_REVIEW'] },
@@ -172,6 +193,7 @@ export class DashboardService {
           this.prisma.item.count({
             where: {
               ...LIVE,
+              ...excludeMonths,
               projectId: p.id,
               type: 'ACTION',
               dueDate: { lt: now },
@@ -181,6 +203,7 @@ export class DashboardService {
           this.prisma.item.count({
             where: {
               ...LIVE,
+              ...excludeMonths,
               projectId: p.id,
               type: 'CLARIFICATION',
               clarificationStatus: { not: 'CLOSED' },
@@ -244,6 +267,7 @@ export class DashboardService {
           CLOSED: clarification('CLOSED'),
         },
       },
+      hidden: disabled.length > 0 ? await this.hiddenSummary(user, disabled) : null,
       projects: byProject,
       upcoming: upcoming.map((m) => ({ ...m, meetingDate: m.meetingDate.toISOString() })),
       attention: buildAttention({
@@ -272,6 +296,60 @@ export class DashboardService {
         })),
       }),
     };
+  }
+
+  /**
+   * What the configuration is withholding, in figures.
+   *
+   * The page prints this. An administrator switching four months off removes
+   * work from every count on the dashboard, and the people reading it had no
+   * part in that decision - so the page says how many live items it is not
+   * counting and which months they came from. Without it the dashboard would
+   * report less than the truth and look exactly like a dashboard reporting
+   * the truth.
+   *
+   * Counted live and in scope, the same as the figures it is explaining: a
+   * number that included inert items would not reconcile against anything a
+   * reader could check.
+   */
+  private async hiddenSummary(user: AuthUser, months: string[]) {
+    const inHiddenMonths = { OR: MonthVisibilityService.excludeClause(months) };
+    const base = { ...projectScope(user), ...LIVE, ...inHiddenMonths };
+
+    const [actions, clarifications, open] = await Promise.all([
+      this.prisma.item.count({ where: { ...base, type: 'ACTION' } }),
+      this.prisma.item.count({ where: { ...base, type: 'CLARIFICATION' } }),
+      /*
+       * Still outstanding - the part of this that matters.
+       *
+       * Two ORs cannot both sit at the top of one `where`, so the month
+       * clause and the status clause are ANDed explicitly rather than one
+       * overwriting the other and the figure quietly becoming something else.
+       */
+      this.prisma.item.count({
+        where: {
+          ...projectScope(user),
+          ...LIVE,
+          AND: [
+            { OR: MonthVisibilityService.excludeClause(months) },
+            {
+              OR: [
+                {
+                  type: 'ACTION' as const,
+                  actionStatus: { in: ['IN_PROGRESS', 'DELAYED', 'UNDER_REVIEW'] as const },
+                },
+                {
+                  type: 'CLARIFICATION' as const,
+                  clarificationStatus: { in: ['OPEN', 'RESPONDED'] as const },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    return { months, actions, clarifications, open };
   }
 }
 

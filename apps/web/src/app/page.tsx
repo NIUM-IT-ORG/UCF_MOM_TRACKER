@@ -101,6 +101,17 @@ interface Summary {
   }[];
   attention: { tone: string; text: string; href: string; action: string }[];
   movement: { month: string; raised: number; closed: number }[];
+  /**
+   * Set when an administrator has switched months off. Null when the page is
+   * counting everything, which is the ordinary case.
+   */
+  hidden: {
+    months: string[];
+    actions: number;
+    clarifications: number;
+    /** Of those, the ones still outstanding. The number that matters. */
+    open: number;
+  } | null;
 }
 
 /*
@@ -152,6 +163,37 @@ export default function Dashboard() {
       />
 
       {error && <Notice tone="red">{error}</Notice>}
+
+      {/*
+        Said on the page, not only on the admin screen.
+        
+        Switching months off removes live commitments from every figure here,
+        and the people reading this had no part in that decision. Without this
+        line the dashboard reports less than the truth and looks exactly like
+        a dashboard reporting the truth.
+      */}
+      {data?.hidden && (
+        <Notice tone="amber">
+          <b>
+            {data.hidden.months.length === 1
+              ? 'One month is not counted'
+              : `${data.hidden.months.length} months are not counted`}
+          </b>{' '}
+          on this page: {data.hidden.months.map(monthLabel).join(', ')}. That leaves out{' '}
+          {data.hidden.actions + data.hidden.clarifications}{' '}
+          {data.hidden.actions + data.hidden.clarifications === 1 ? 'item' : 'items'}
+          {data.hidden.open > 0 && (
+            <>
+              , <b>{data.hidden.open} of them still open</b>
+            </>
+          )}
+          . Nothing was deleted — all of it is in the{' '}
+          <Link className="font-semibold" href="/register?type=ACTION&live=true">
+            Action Register
+          </Link>{' '}
+          and in every report.
+        </Notice>
+      )}
 
       {!data ? (
         <Card>
@@ -524,4 +566,25 @@ function Hero({
       <div className={`mt-2.5 border-t pt-2 text-[11.5px] ${rule} ${caption}`}>{note}</div>
     </Link>
   );
+}
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** "2026-09" to "September 2026", for the hidden-months notice. */
+function monthLabel(key: string): string {
+  const [year, month] = key.split('-');
+  return `${MONTHS[Number(month) - 1] ?? month} ${year}`;
 }
