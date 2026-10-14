@@ -39,22 +39,48 @@ const migration = read(
 const web = read('apps', 'web', 'src', 'app', 'page.tsx');
 
 describe('naming a month', () => {
+  /*
+   * In UTC throughout. `meetings.meeting_date` is a Postgres `date` and
+   * Prisma hands it back as midnight UTC; building the boundaries locally
+   * slid the window by the server's offset, leaving the 1st of a
+   * switched-off month still counted and dropping the 1st of the next one
+   * instead. It was correct on a UTC or IST machine and wrong at UTC-4.
+   *
+   * These assert against the exact values Prisma produces, so a return to
+   * local-time arithmetic fails here rather than in somebody's figures.
+   */
   it('uses the meeting month, zero padded', () => {
-    expect(monthKey(new Date(2026, 8, 23))).toBe('2026-09');
-    expect(monthKey(new Date(2026, 0, 1))).toBe('2026-01');
-    expect(monthKey(new Date(2026, 11, 31))).toBe('2026-12');
+    expect(monthKey(new Date('2026-09-23T00:00:00.000Z'))).toBe('2026-09');
+    expect(monthKey(new Date('2026-01-01T00:00:00.000Z'))).toBe('2026-01');
+    expect(monthKey(new Date('2026-12-31T00:00:00.000Z'))).toBe('2026-12');
+  });
+
+  it('names the first and last day of a month as that month, in any zone', () => {
+    // The two days a local-time reading gets wrong.
+    expect(monthKey(new Date('2026-09-01T00:00:00.000Z'))).toBe('2026-09');
+    expect(monthKey(new Date('2026-09-30T00:00:00.000Z'))).toBe('2026-09');
   });
 
   it('covers a month as a half-open range, so no day lands in two months', () => {
     const { gte, lt } = monthRange('2026-09');
-    expect(gte).toEqual(new Date(2026, 8, 1));
-    expect(lt).toEqual(new Date(2026, 9, 1));
+    expect(gte.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    expect(lt.toISOString()).toBe('2026-10-01T00:00:00.000Z');
+  });
+
+  it('takes in every day of the month a date column can hold', () => {
+    const { gte, lt } = monthRange('2026-09');
+    const day = (iso: string) => new Date(iso);
+    expect(day('2026-09-01T00:00:00.000Z') >= gte).toBe(true);
+    expect(day('2026-09-30T00:00:00.000Z') < lt).toBe(true);
+    // And neither neighbour.
+    expect(day('2026-08-31T00:00:00.000Z') >= gte).toBe(false);
+    expect(day('2026-10-01T00:00:00.000Z') < lt).toBe(false);
   });
 
   it('rolls December into the next January rather than month thirteen', () => {
     const { gte, lt } = monthRange('2026-12');
-    expect(gte).toEqual(new Date(2026, 11, 1));
-    expect(lt).toEqual(new Date(2027, 0, 1));
+    expect(gte.toISOString()).toBe('2026-12-01T00:00:00.000Z');
+    expect(lt.toISOString()).toBe('2027-01-01T00:00:00.000Z');
   });
 
   it('builds one clause per disabled month, against the meeting date', () => {

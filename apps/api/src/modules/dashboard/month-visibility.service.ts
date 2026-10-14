@@ -179,13 +179,28 @@ export class MonthVisibilityService {
   }
 }
 
-/** "2026-09", from a date, in the server's own zone as every other date here. */
+/*
+ * Both of these work in UTC, and that is not a preference.
+ *
+ * `meetings.meeting_date` is a Postgres `date` - a calendar day with no time
+ * and no zone - and Prisma presents it as midnight **UTC**. Building the
+ * month boundaries in the server's local zone instead compares two different
+ * things, and the window slides by the offset: on a machine at UTC-4,
+ * switching September off left meetings on the 1st of September still
+ * counted and quietly dropped the 1st of October instead. It happened to be
+ * right on a UTC or IST server, which is the worst kind of bug - one that
+ * works everywhere it is tested.
+ *
+ * A calendar day is compared as a calendar day. Nothing here is an instant.
+ */
+
+/** "2026-09", from a date column as Prisma hands it back. */
 export function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
 /** The half-open range a month covers: `gte` the first, `lt` the next first. */
 export function monthRange(month: string): { gte: Date; lt: Date } {
   const [year, m] = month.split('-').map(Number);
-  return { gte: new Date(year, m - 1, 1), lt: new Date(year, m, 1) };
+  return { gte: new Date(Date.UTC(year, m - 1, 1)), lt: new Date(Date.UTC(year, m, 1)) };
 }
