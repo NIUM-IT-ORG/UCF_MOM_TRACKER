@@ -1,0 +1,29 @@
+﻿"template_name","category","language","header_type","header_media","body","footer","buttons","variable_count","variables","sample_values","whatsapp_events","notes"
+"ucf_meeting_invite","UTILITY","en","DOCUMENT","Agenda PDF (optional - omitted for MTG-02 and MTG-06)","UCF Review Meeting — {{1}}
+
+{{2}}
+Date: {{3}}
+Venue: {{4}}
+Chair: {{5}}
+
+Agenda attached. Please confirm your attendance.","","","5","{{1}} meeting code | {{2}} meeting title | {{3}} date and time | {{4}} venue | {{5}} chairperson designation","UCF/EAP05/RM-05 | Monthly Review — Warangal Smart Roads | 12 November 2026, 11:00 | Conference Hall, UCF Head Office | Mission Director","MTG-01, MTG-02, MTG-05, MTG-06, MTG-07","Five events share this template. MTG-02 (instant meeting) and MTG-06 (T-2h) send it without the document header."
+"ucf_mom_circulated","UTILITY","en","DOCUMENT","Signed MoM PDF, annexures merged into the same file","Minutes of Meeting — {{1}}
+
+{{2}} held on {{3}} has been signed and circulated.
+{{4}} action items are now live against your name.
+
+Signed MoM attached.","","","4","{{1}} meeting code | {{2}} meeting title | {{3}} meeting date | {{4}} count of THIS RECIPIENT's own live actions","UCF/EAP05/RM-05 | Monthly Review — Warangal Smart Roads | 12 November 2026 | 3","MOM-05","{{4}} is the only per-recipient variable in the set - it is resolved at dispatch time, not per notification. Reads correctly at 0, which happens: the minutes go to everyone invited whether or not they own anything."
+"ucf_action_assigned","UTILITY","en","NONE","","UCF Action {{1}}
+
+{{2}}
+
+Due: {{3}}
+Priority: {{4}}
+From: {{5}}
+
+Update at {{6}}","","","6","{{1}} action reference | {{2}} description, truncated to 180 chars | {{3}} due date | {{4}} priority | {{5}} meeting code | {{6}} deep link","ACT-348 | Identify priority areas and candidate cities for pilots | 10 November 2026 | High | UCF/EAP05/RM-05 | https://ucfmom.nium.org.in/register?item=clx1","ACT-01, ACT-02, ACT-03, ACT-04","{{2}} truncates on a word boundary with an ellipsis; the full text is behind {{6}}. One message per responsible officer, not one per action."
+"ucf_generic_share","UTILITY","en","NONE","","UCF Tracker — {{1}}
+
+{{2}} has shared {{3}} with you.
+
+Open: {{4}}","","","4","{{1}} subject or object reference | {{2}} sender name, or 'The UCF Tracker' for system events | {{3}} object description as a noun phrase | {{4}} deep link","UCF/EAP05/RM-05 | The UCF Tracker | the minutes of Monthly Review — Warangal Smart Roads | https://ucfmom.nium.org.in/meetings/clx1","MTG-04, MTG-08, MOM-04, ACT-07, ACT-08, CLA-03","The catch-all: six WhatsApp events plus every manual share. {{3}} carries the whole meaning, so it must read as a noun phrase that completes the sentence. A free-text note typed on a manual share is NOT carried here - WhatsApp cannot take it outside a session window."
