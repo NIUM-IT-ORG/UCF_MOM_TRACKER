@@ -228,3 +228,181 @@ NOTIFY_TZ=Asia/Kolkata
 - A failed WhatsApp number retries twice, then shows as failed in the log with the provider error, and does not block the other recipients.
 - Switching off WhatsApp reminders in preferences suppresses `ACT-02` and `ACT-03` but not `ACT-01` or `MOM-05`.
 - Every row in the dispatch log names its event code, template, channel, recipient and state.
+
+---
+
+## 9 · WhatsApp go-live — decisions taken 29 Oct 2026
+
+Signed off by the client before integration started. These settle the three
+things §2 left open; nothing else in this document changes.
+
+### 9.1 Scope — all sixteen WhatsApp events
+
+Every event in §2 carrying WhatsApp is in the first release:
+
+| Already emitted, needs only the dispatcher | Needs the scheduler as well |
+|---|---|
+| MTG-01, MTG-02, MTG-07, MTG-08 | MTG-04, MTG-05, MTG-06 |
+| MOM-04, MOM-05 | ACT-02, ACT-03, ACT-04, ACT-08 |
+| ACT-01, ACT-07 | CLA-03 |
+
+The split is not arbitrary and it is the build order: the eight on the left
+already call `emit()` and write a `notifications` row, so a dispatcher and the
+Gupshup adapter make them real with no new triggers. Every one on the right is
+cron-driven and needs the scheduler that does not exist yet.
+
+The other eleven events stay email and in-app only. MoM submitted, returned and
+approved, action reported, confirmed and reassigned, clarification raised and
+answered, and both digests are desk work — a phone message about them is noise
+that teaches people to ignore the ones that matter.
+
+### 9.2 An officer with no mobile number — skip and log
+
+`users.mobile` stays optional. A recipient without an E.164 number gets no
+WhatsApp dispatch; the row is written with `state = SKIPPED` and
+`lastError = 'No mobile number on record'`, and the Communication log shows it.
+
+Nothing blocks and nothing fails loudly, which is the risk this accepts: a
+Mission Director with no number on file misses every WhatsApp message and the
+only sign is a log nobody reads. Mitigations, in order of cheapness:
+
+- the Communication log filters to skipped rows, so the question "who is not
+  being reached" has an answer on one screen;
+- the People screen marks an officer with no number, since that is where it
+  gets fixed;
+- consider a weekly line in the RPT-01 digest counting skipped dispatches.
+
+`SKIPPED` is a new `DispatchState`. It is deliberately not `FAILED` — nothing
+went wrong with a send that was never attempted, and conflating the two makes
+the retry figures meaningless.
+
+### 9.3 `ucf_mom_circulated` `{{4}}` is per recipient
+
+The template reads "{{4}} action items are now live **against your name**", and
+the MOM-05 payload currently carries the meeting-wide count. Shipped as-is, an
+officer with one action is told twenty-three are live against theirs.
+
+The variable is resolved **per recipient, at dispatch time**, not per
+notification. One `notifications` row still describes the event; each
+`dispatches` row renders its own variables from the recipient it is addressed
+to. This is the only per-recipient variable in the four templates, and the
+dispatcher is shaped for it rather than around it — `renderVariables(template,
+notification, recipient)`, which the other three ignore.
+
+An officer who owns nothing in that meeting is still sent the MoM: the minutes
+go to everyone invited, and `{{4}}` is `0`. The wording holds at zero because
+"0 action items are now live against your name" is true and useful.
+
+### 9.4 What has to happen before a single message can be sent
+
+In order, longest lead time first.
+
+1. **Register the four templates** with the aggregator. UTILITY category, one to
+   three days approval, and nothing can be tested without them. §9.5 is the
+   text to submit, verbatim.
+2. **A WhatsApp Business number**, verified, with the display name approved —
+   this is the "UCF Tracker" the recipient sees.
+3. **Mobile numbers on file**, E.164, for every officer who should be reached.
+   §9.2 is what happens when they are missing, not an excuse for missing them.
+4. **The dispatcher** — `dispatches` rows, the queue, retry, idempotency and
+   quiet hours. P5-01.
+5. **The Gupshup adapter** and its delivery webhook. P5-02.
+6. **The scheduler**, for the eight cron events in §9.1.
+
+### 9.5 Template submission sheet
+
+Paste these verbatim into the aggregator console. Category **UTILITY** for all
+four, language **English**, and the sample values are what the reviewer needs to
+approve it.
+
+---
+
+**`ucf_meeting_invite`** · header: document (optional, agenda PDF)
+
+```
+UCF Review Meeting — {{1}}
+
+{{2}}
+Date: {{3}}
+Venue: {{4}}
+Chair: {{5}}
+
+Agenda attached. Please confirm your attendance.
+```
+
+Samples — `{{1}}` UCF/EAP05/RM-05 · `{{2}}` Monthly Review — Warangal Smart
+Roads · `{{3}}` 12 November 2026, 11:00 · `{{4}}` Conference Hall, UCF Head
+Office · `{{5}}` Mission Director
+
+---
+
+**`ucf_mom_circulated`** · header: document (signed MoM PDF, annexures merged)
+
+```
+Minutes of Meeting — {{1}}
+
+{{2}} held on {{3}} has been signed and circulated.
+{{4}} action items are now live against your name.
+
+Signed MoM attached.
+```
+
+Samples — `{{1}}` UCF/EAP05/RM-05 · `{{2}}` Monthly Review — Warangal Smart
+Roads · `{{3}}` 12 November 2026 · `{{4}}` 3
+
+---
+
+**`ucf_action_assigned`**
+
+```
+UCF Action {{1}}
+
+{{2}}
+
+Due: {{3}}
+Priority: {{4}}
+From: {{5}}
+
+Update at {{6}}
+```
+
+Samples — `{{1}}` ACT-348 · `{{2}}` Identify priority areas and candidate cities
+for pilots · `{{3}}` 10 November 2026 · `{{4}}` High · `{{5}}` UCF/EAP05/RM-05 ·
+`{{6}}` https://ucfmom.nium.org.in/register?item=...
+
+`{{2}}` is truncated to 180 characters on a word boundary, with an ellipsis. The
+full text is in the system and the link goes to it.
+
+---
+
+**`ucf_generic_share`**
+
+```
+UCF Tracker — {{1}}
+
+{{2}} has shared {{3}} with you.
+
+Open: {{4}}
+```
+
+Samples — `{{1}}` UCF/EAP05/RM-05 · `{{2}}` The UCF Tracker · `{{3}}` the
+minutes of Monthly Review — Warangal Smart Roads · `{{4}}`
+https://ucfmom.nium.org.in/meetings/...
+
+`{{2}}` is the sender's name for a manual share and "The UCF Tracker" for a
+system event. Seven system events use this template, so `{{3}}` carries the
+whole meaning — write it as a noun phrase that completes the sentence.
+
+### 9.6 Reminder volume
+
+Eleven of the sixteen are reminders, and reminders are where the per-conversation
+cost and the message fatigue both come from. Against the current data — 129
+meetings, 349 items of which a small fraction are live — the reminder set will
+outweigh the event-driven set several times over once the backlog of
+uncirculated MoMs is cleared.
+
+Two levers exist and neither needs a code change at go-live: quiet hours
+(21:00–07:00 IST, with MTG-02, MTG-06 and ACT-08 exempt) and the per-user
+preference, which may switch off reminder-class events but never ACT-01,
+MOM-05 or an approval. If the bill is a surprise, trim the reminders, not the
+assignments.
